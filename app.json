@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Lost or Found",
+    "slug": "RepairLostOrFound",
+    "icon": "./assets/images/icon.png",
+    "scheme": "lostorfound",
+    "android": {
+      "package": "com.anonymous.RepairLostOrFound",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png",
+        "backgroundColor": "#CFE9FF"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "categories": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            { "scheme": "lostorfound" }
+          ]
+        }
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.RepairLostOrFound",
+      "icon": "./assets/images/icon.png",
+      "associatedDomains": [],
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["lostorfound"]
+          }
+        ]
+      }
+    },
+    "plugins": [
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.anonymous.repairlostorfound",
+          "enableGooglePay": true
+        }
+      ]
+    ]
+  }
+}

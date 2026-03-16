@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,14 +9,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Pressable,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { API_BASE_URL } from "../src/lib/config";
 
 type ReportType = "LOST" | "FOUND";
 
 export default function CreateReportScreen() {
-  const router = useRouter();
+  // Les inn eventuelle lat/lng fra /map (eks: /create-report?lat=...&lng=...)
+  const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
 
   // Skjema-state
   const [type, setType] = useState<ReportType>("LOST");
@@ -26,7 +28,7 @@ export default function CreateReportScreen() {
   const [color, setColor] = useState("");
   const [brand, setBrand] = useState("");
 
-  // Oslo default for enkel testing
+  // Oslo default for enkel testing – overstyres når vi kommer tilbake fra kart
   const [lat, setLat] = useState("59.9139");
   const [lng, setLng] = useState("10.7522");
 
@@ -34,6 +36,17 @@ export default function CreateReportScreen() {
   const [rewardNOK, setRewardNOK] = useState("199");
 
   const [saving, setSaving] = useState(false);
+
+  // Når vi navigerer tilbake fra /map med lat/lng i URL, oppdater feltene
+  useEffect(() => {
+    if (typeof params.lat === "string" && params.lat.trim().length > 0) {
+      setLat(params.lat);
+    }
+    if (typeof params.lng === "string" && params.lng.trim().length > 0) {
+      setLng(params.lng);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.lat, params.lng]);
 
   const validate = () => {
     if (!title.trim()) {
@@ -92,21 +105,17 @@ export default function CreateReportScreen() {
       const reportId = data?.report?.id;
       const count = data?.candidates?.length ?? 0;
 
-      Alert.alert(
-        "Lagret",
-        `Rapport opprettet (${type}). Foreslåtte matcher: ${count}`,
-        [
-          {
-            text: "Se matcher",
-            onPress: () =>
-              router.push({
-                pathname: "/match",
-                params: { reportId },
-              }),
-          },
-          { text: "OK" },
-        ]
-      );
+      Alert.alert("Lagret", `Rapport opprettet (${type}). Foreslåtte matcher: ${count}`, [
+        {
+          text: "Se matcher",
+          onPress: () =>
+            router.push({
+              pathname: "/match",
+              params: { reportId },
+            }),
+        },
+        { text: "OK" },
+      ]);
     } catch (e: any) {
       console.error("Create report error:", e);
       Alert.alert("Feil", e.message ?? "Kunne ikke opprette rapport.");
@@ -117,6 +126,11 @@ export default function CreateReportScreen() {
 
   const setLost = () => setType("LOST");
   const setFound = () => setType("FOUND");
+
+  const openMap = () => {
+    // Åpne kartet slik at bruker kan velge posisjon.
+    router.push("/map");
+  };
 
   return (
     <KeyboardAvoidingView
@@ -129,6 +143,7 @@ export default function CreateReportScreen() {
         {/* Velg type */}
         <View style={styles.row}>
           <Button title={type === "LOST" ? "Mistet ✓" : "Mistet"} onPress={setLost} />
+          <View style={{ width: 8 }} />
           <Button title={type === "FOUND" ? "Funnet ✓" : "Funnet"} onPress={setFound} />
         </View>
 
@@ -170,7 +185,8 @@ export default function CreateReportScreen() {
 
         {/* Posisjon */}
         <Text style={styles.section}>Posisjon (for match / avstand)</Text>
-        <View style={styles.row}>
+
+        <View style={[styles.row, { alignItems: "flex-end" }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.labelSmall}>Lat</Text>
             <TextInput
@@ -181,7 +197,9 @@ export default function CreateReportScreen() {
               placeholder="59.9139"
             />
           </View>
+
           <View style={{ width: 12 }} />
+
           <View style={{ flex: 1 }}>
             <Text style={styles.labelSmall}>Lng</Text>
             <TextInput
@@ -194,11 +212,19 @@ export default function CreateReportScreen() {
           </View>
         </View>
 
+        <View style={styles.row}>
+          <Pressable style={styles.pickBtn} onPress={openMap}>
+            <Text style={styles.pickBtnText}>Velg på kart</Text>
+          </Pressable>
+        </View>
+
         {/* Finnerlønn kun for LOST */}
         {type === "LOST" && (
           <>
             <Text style={styles.section}>Finnerlønn</Text>
-            <Text style={styles.help}>Oppgi i NOK (f.eks. 199). 5% service fee legges til ved betaling.</Text>
+            <Text style={styles.help}>
+              Oppgi i NOK (f.eks. 199). 5% service fee legges til ved betaling.
+            </Text>
             <TextInput
               style={styles.input}
               value={rewardNOK}
@@ -239,4 +265,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#fff",
   },
+  pickBtn: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  pickBtnText: { color: "#fff", fontWeight: "700" },
 });

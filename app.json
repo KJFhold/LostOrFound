@@ -16,11 +16,15 @@
           "action": "VIEW",
           "autoVerify": false,
           "categories": ["BROWSABLE", "DEFAULT"],
-          "data": [
-            { "scheme": "lostorfound" }
-          ]
+          "data": [{ "scheme": "lostorfound" }]
         }
-      ]
+      ],
+      "permissions": ["ACCESS_FINE_LOCATION"],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCbpbjPsvPbOShMqq2JyhvXcPx90Ul5TSc"
+        }
+      }
     },
     "ios": {
       "bundleIdentifier": "com.anonymous.RepairLostOrFound",
@@ -31,7 +35,8 @@
           {
             "CFBundleURLSchemes": ["lostorfound"]
           }
-        ]
+        ],
+        "NSLocationWhenInUseUsageDescription": "Vi bruker posisjonen din for å vise treff i nærheten på kartet."
       }
     },
     "plugins": [

@@ -22,7 +22,7 @@
       "permissions": ["ACCESS_FINE_LOCATION"],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAYnFzwcO6YQN7LpWGHeClpwKCm2EfpyNs"
+          "apiKey": "AIzaSyAAqPdJr3ISHOXc1d7jXLwZJ1N4acot7FM"
         }
       }
     },

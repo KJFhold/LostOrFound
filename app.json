@@ -4,8 +4,13 @@
     "slug": "RepairLostOrFound",
     "icon": "./assets/images/icon.png",
     "scheme": "lostorfound",
+    "extra": {
+      "eas": {
+        "projectId": "42c24037-c853-47ae-bb4c-5208947e1270"
+      }
+    },
     "android": {
-      "package": "com.anonymous.RepairLostOrFound",
+      "package": "com.kjfok.lostorfound",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png",
@@ -15,38 +20,53 @@
         {
           "action": "VIEW",
           "autoVerify": false,
-          "categories": ["BROWSABLE", "DEFAULT"],
-          "data": [{ "scheme": "lostorfound" }]
+          "categories": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "lostorfound"
+            }
+          ]
         }
       ],
-      "permissions": ["ACCESS_FINE_LOCATION"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAAqPdJr3ISHOXc1d7jXLwZJ1N4acot7FM"
+          "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_API_KEY_IF_BUILDING_ANDROID"
         }
       }
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.RepairLostOrFound",
+      "bundleIdentifier": "com.kjfok.lostorfound",
       "icon": "./assets/images/icon.png",
       "associatedDomains": [],
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["lostorfound"]
+            "CFBundleURLSchemes": [
+              "lostorfound"
+            ]
           }
         ],
-        "NSLocationWhenInUseUsageDescription": "Vi bruker posisjonen din for å vise treff i nærheten på kartet."
+        "NSLocationWhenInUseUsageDescription": "Vi bruker posisjonen din for å vise treff i nærheten på kartet.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.anonymous.repairlostorfound",
+          "merchantIdentifier": "merchant.com.kjfok.lostorfound",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-localization",
+      "expo-font",
+      "react-native-localize"
     ]
   }
 }

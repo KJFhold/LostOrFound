@@ -1,0 +1,58 @@
+# EAS Build upload ignore file
+# Important: EAS prioritizes .easignore over .gitignore, so keep core .gitignore rules here too.
+
+# Dependencies
+node_modules/
+
+# Expo local state
+.expo/
+.expo-shared/
+
+# Native build folders generated locally. EAS can regenerate these when needed.
+android/
+ios/
+
+# Build outputs
+build/
+dist/
+web-build/
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Environment files should not be uploaded. Use Expo/EAS Environment Variables instead.
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Local documentation, exports and handover files not needed by EAS Build
+*.zip
+*.rar
+*.7z
+*.pdf
+*.doc
+*.docx
+*.xlsx
+*.csv
+handover/
+docs/
+screenshots/
+assets-temp/
+test-data/
+examples/

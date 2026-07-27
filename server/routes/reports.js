@@ -21,6 +21,31 @@ if (!supaAdmin || typeof supaAdmin.from !== "function") {
   );
 }
 
+const MATCH_REFRESH_CONFIG = {
+  candidateLimit: Number.parseInt(process.env.MATCH_CANDIDATE_LIMIT || "50", 10),
+  maxDistanceM: Number.parseInt(process.env.MATCH_MAX_DISTANCE_M || "3000", 10),
+  maxAgeDays: Number.parseInt(process.env.MATCH_MAX_AGE_DAYS || "30", 10),
+  minScore: Number.parseInt(process.env.MATCH_MIN_SCORE || "65", 10),
+  timeBufferHours: Number.parseInt(process.env.MATCH_TIME_BUFFER_HOURS || "48", 10),
+};
+
+function safeInt(value, fallback, min, max) {
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function matchRefreshParams(reportId) {
+  return {
+    p_report_id: reportId,
+    p_candidate_limit: safeInt(MATCH_REFRESH_CONFIG.candidateLimit, 50, 1, 500),
+    p_max_distance_m: safeInt(MATCH_REFRESH_CONFIG.maxDistanceM, 3000, 50, 100000),
+    p_max_age_days: safeInt(MATCH_REFRESH_CONFIG.maxAgeDays, 30, 1, 3650),
+    p_min_score: safeInt(MATCH_REFRESH_CONFIG.minScore, 65, 0, 100),
+    p_time_buffer_hours: safeInt(MATCH_REFRESH_CONFIG.timeBufferHours, 48, 0, 24 * 30),
+  };
+}
+
 function toFiniteNumberOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -97,9 +122,9 @@ router.post("/", requireUser, async (req, res) => {
 
     let candidates = [];
     try {
-      await supaAdmin.rpc("refresh_matches_for_report", {
-        p_report_id: data.id,
-      });
+      const params = matchRefreshParams(data.id);
+
+      await supaAdmin.rpc("refresh_matches_for_report", params);
 
       const matchColumn = data.type === "LOST" ? "lost_id" : "found_id";
       const { data: matchRows, error: matchErr } = await supaAdmin

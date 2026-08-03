@@ -45,6 +45,7 @@ async function userOwnsReport(reportId, userId) {
 
   if (error) throw error;
   if (!data) return null;
+
   return { ok: true, kind: "report", id: reportId };
 }
 
@@ -54,15 +55,20 @@ async function resolveNotificationTarget(notification, userId) {
   const type = String(notification?.type || "").toUpperCase();
 
   if (!entityId) {
-    return { ok: false, reason: "TARGET_NOT_FOUND", kind: entityType || "unknown", id: entityId || null };
+    return { ok: false, reason: "TARGET_NOT_FOUND", kind: entityType || "unknown", id: null };
   }
 
-  // Messages/chats in this app use match/conversation id as deep link target to /chat/:id.
   if (type === "NEW_MESSAGE" || entityType === "chat" || entityType === "match") {
     const matchTarget = await userOwnsMatch(entityId, userId);
     if (!matchTarget) {
-      return { ok: false, reason: "TARGET_NOT_FOUND", kind: type === "NEW_MESSAGE" ? "chat" : "match", id: entityId };
+      return {
+        ok: false,
+        reason: "TARGET_NOT_FOUND",
+        kind: type === "NEW_MESSAGE" ? "chat" : "match",
+        id: entityId,
+      };
     }
+
     return type === "NEW_MESSAGE"
       ? { ok: true, kind: "chat", id: entityId }
       : { ok: true, kind: "match", id: entityId };
@@ -76,8 +82,19 @@ async function resolveNotificationTarget(notification, userId) {
     return { ok: true, kind: "report", id: entityId };
   }
 
-  // Fallback: treat unknown entity types as missing rather than navigating blindly.
   return { ok: false, reason: "UNSUPPORTED_TARGET", kind: entityType || "unknown", id: entityId };
+}
+
+async function getUserNotification(id, userId) {
+  const { data, error } = await supaAdmin
+    .from("notifications")
+    .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
 }
 
 // GET /notifications?limit=50
@@ -85,11 +102,12 @@ router.get("/", requireUser, async (req, res) => {
   try {
     const userId = req.user?.id;
     const limit = Math.max(1, Math.min(100, Number(req.query.limit || 50)));
+
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { data, error } = await supaAdmin
       .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
+      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, agg_count")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -105,7 +123,7 @@ router.get("/", requireUser, async (req, res) => {
             target_status: target.ok ? "ok" : "missing",
             target_kind: target.kind,
           };
-        } catch (e) {
+        } catch {
           return {
             ...n,
             target_status: "missing",
@@ -116,44 +134,6 @@ router.get("/", requireUser, async (req, res) => {
     );
 
     return res.json({ notifications });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message ?? "Server error" });
-  }
-});
-
-// GET /notifications/:id/resolve
-router.get("/:id/resolve", requireUser, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const id = String(req.params.id || "");
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    if (!id) return res.status(400).json({ error: "id required" });
-
-    const { data, error } = await supaAdmin
-      .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
-      .eq("id", id)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error) return res.status(400).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: "Not found" });
-
-    const target = await resolveNotificationTarget(data, userId);
-    if (!target.ok) {
-      return res.json({
-        ok: false,
-        reason: target.reason,
-        target_kind: target.kind,
-        target_id: target.id,
-      });
-    }
-
-    return res.json({
-      ok: true,
-      target_kind: target.kind,
-      target_id: target.id,
-    });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
@@ -178,11 +158,40 @@ router.get("/unread-count", requireUser, async (req, res) => {
   }
 });
 
+// GET /notifications/:id/resolve
+router.get("/:id/resolve", requireUser, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const id = String(req.params.id || "");
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const notification = await getUserNotification(id, userId);
+    if (!notification) return res.status(404).json({ error: "Not found" });
+
+    const target = await resolveNotificationTarget(notification, userId);
+    if (!target.ok) {
+      return res.json({
+        ok: false,
+        reason: target.reason,
+        target_kind: target.kind,
+        target_id: target.id,
+      });
+    }
+
+    return res.json({ ok: true, target_kind: target.kind, target_id: target.id });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
 // POST /notifications/:id/read
 router.post("/:id/read", requireUser, async (req, res) => {
   try {
     const userId = req.user?.id;
     const id = String(req.params.id || "");
+
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     if (!id) return res.status(400).json({ error: "id required" });
 
@@ -196,6 +205,7 @@ router.post("/:id/read", requireUser, async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: "Not found" });
+
     return res.json({ ok: true, id: data.id, read_at: data.read_at });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
@@ -216,6 +226,73 @@ router.post("/read-all", requireUser, async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
     return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+// DELETE /notifications/missing
+// Deletes notifications for the current user where the linked report/match/chat is gone.
+router.delete("/missing", requireUser, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { data, error } = await supaAdmin
+      .from("notifications")
+      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
+      .eq("user_id", userId)
+      .limit(300);
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    const toDelete = [];
+    for (const n of data || []) {
+      try {
+        const target = await resolveNotificationTarget(n, userId);
+        if (!target.ok) toDelete.push(n.id);
+      } catch {
+        toDelete.push(n.id);
+      }
+    }
+
+    if (toDelete.length === 0) return res.json({ ok: true, deleted: 0 });
+
+    const { error: dErr } = await supaAdmin
+      .from("notifications")
+      .delete()
+      .eq("user_id", userId)
+      .in("id", toDelete);
+
+    if (dErr) return res.status(400).json({ error: dErr.message });
+
+    return res.json({ ok: true, deleted: toDelete.length });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+// DELETE /notifications/:id
+router.delete("/:id", requireUser, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const id = String(req.params.id || "");
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const { data, error } = await supaAdmin
+      .from("notifications")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: "Not found" });
+
+    return res.json({ ok: true, id: data.id });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }

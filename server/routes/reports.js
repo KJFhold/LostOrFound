@@ -56,6 +56,16 @@ function toIntegerOrNull(v) {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
+async function safeDelete(queryBuilder, label, results) {
+  try {
+    const { error } = await queryBuilder;
+    if (error) results.push({ step: label, ok: false, error: error.message });
+    else results.push({ step: label, ok: true });
+  } catch (e) {
+    results.push({ step: label, ok: false, error: String(e?.message ?? e) });
+  }
+}
+
 /**
  * POST /reports
  * Opprett rapport + trigger match-motor
@@ -116,15 +126,11 @@ router.post("/", requireUser, async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    if (error) return res.status(400).json({ error: error.message });
 
     let candidates = [];
     try {
-      const params = matchRefreshParams(data.id);
-
-      await supaAdmin.rpc("refresh_matches_for_report", params);
+      await supaAdmin.rpc("refresh_matches_for_report", matchRefreshParams(data.id));
 
       const matchColumn = data.type === "LOST" ? "lost_id" : "found_id";
       const { data: matchRows, error: matchErr } = await supaAdmin
@@ -133,27 +139,20 @@ router.post("/", requireUser, async (req, res) => {
         .eq(matchColumn, data.id)
         .order("score", { ascending: false });
 
-      if (matchErr) {
-        console.warn("[reports] fetch candidates failed", matchErr.message);
-      } else {
-        candidates = matchRows || [];
-      }
+      if (matchErr) console.warn("[reports] fetch candidates failed", matchErr.message);
+      else candidates = matchRows || [];
     } catch (rpcErr) {
       console.warn("[reports] refresh_matches_for_report failed", rpcErr?.message ?? rpcErr);
     }
 
     return res.json({ report: data, candidates });
   } catch (e) {
-    return res.status(500).json({
-      error: e?.message ?? "Server error",
-    });
+    return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 
 /**
  * GET /reports/mine
- * Hent brukerens egne rapporter.
- * Må ligge før /:id for å unngå route-kollisjon.
  */
 router.get("/mine", requireUser, async (req, res) => {
   try {
@@ -167,21 +166,16 @@ router.get("/mine", requireUser, async (req, res) => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
+    if (error) return res.status(400).json({ error: error.message });
     return res.json({ reports: data || [] });
   } catch (e) {
-    return res.status(500).json({
-      error: e?.message ?? "Server error",
-    });
+    return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 
 /**
  * DELETE /reports/:id
- * Slett rapport (eier-sjekk) + best-effort cleanup av Storage-objekter.
+ * Slett rapport + best-effort cleanup av bilder, matcher, varsler og samtaledata.
  */
 router.delete("/:id", requireUser, async (req, res) => {
   try {
@@ -205,7 +199,59 @@ router.delete("/:id", requireUser, async (req, res) => {
 
     if (iErr) return res.status(400).json({ error: iErr.message });
 
+    const { data: matches, error: mErr } = await supaAdmin
+      .from("matches")
+      .select("id")
+      .or(`lost_id.eq.${reportId},found_id.eq.${reportId}`);
+
+    if (mErr) return res.status(400).json({ error: mErr.message });
+
+    const matchIds = (matches || []).map((m) => m.id).filter(Boolean);
+    const cleanupResults = [];
+
+    // Delete notifications pointing directly to this report.
+    await safeDelete(
+      supaAdmin.from("notifications").delete().eq("entity_type", "report").eq("entity_id", reportId),
+      "notifications:report",
+      cleanupResults
+    );
+
+    // Delete notifications and related rows pointing to matches/conversations for this report.
+    if (matchIds.length > 0) {
+      await safeDelete(
+        supaAdmin.from("notifications").delete().in("entity_id", matchIds),
+        "notifications:matches_or_chat",
+        cleanupResults
+      );
+      await safeDelete(
+        supaAdmin.from("payments").delete().in("match_id", matchIds),
+        "payments",
+        cleanupResults
+      );
+      await safeDelete(
+        supaAdmin.from("messages").delete().in("conversation_id", matchIds),
+        "messages",
+        cleanupResults
+      );
+      await safeDelete(
+        supaAdmin.from("conversations").delete().in("id", matchIds),
+        "conversations",
+        cleanupResults
+      );
+      await safeDelete(
+        supaAdmin.from("matches").delete().in("id", matchIds),
+        "matches",
+        cleanupResults
+      );
+    }
+
     const paths = (imgs || []).map((x) => x.path).filter(Boolean);
+
+    await safeDelete(
+      supaAdmin.from("report_images").delete().eq("report_id", reportId),
+      "report_images",
+      cleanupResults
+    );
 
     const { error: dErr } = await supaAdmin
       .from("reports")
@@ -213,7 +259,7 @@ router.delete("/:id", requireUser, async (req, res) => {
       .eq("id", reportId)
       .eq("user_id", user.id);
 
-    if (dErr) return res.status(400).json({ error: dErr.message });
+    if (dErr) return res.status(400).json({ error: dErr.message, cleanupResults });
 
     const byBucket = new Map();
     for (const p of paths) {
@@ -224,30 +270,31 @@ router.delete("/:id", requireUser, async (req, res) => {
       byBucket.get(bucket).push(objectPath);
     }
 
-    const cleanupResults = [];
+    const storageCleanup = [];
     for (const [bucket, objectPaths] of byBucket.entries()) {
       try {
-        const { error: sErr } = await supaAdmin.storage
-          .from(bucket)
-          .remove(objectPaths);
-        if (sErr) cleanupResults.push({ bucket, ok: false, error: sErr.message });
-        else cleanupResults.push({ bucket, ok: true, count: objectPaths.length });
+        const { error: sErr } = await supaAdmin.storage.from(bucket).remove(objectPaths);
+        if (sErr) storageCleanup.push({ bucket, ok: false, error: sErr.message });
+        else storageCleanup.push({ bucket, ok: true, count: objectPaths.length });
       } catch (e) {
-        cleanupResults.push({ bucket, ok: false, error: String(e) });
+        storageCleanup.push({ bucket, ok: false, error: String(e?.message ?? e) });
       }
     }
 
-    return res.json({ ok: true, deleted: reportId, storageCleanup: cleanupResults });
-  } catch (e) {
-    return res.status(500).json({
-      error: e?.message ?? "Server error",
+    return res.json({
+      ok: true,
+      deleted: reportId,
+      matchCleanupCount: matchIds.length,
+      cleanupResults,
+      storageCleanup,
     });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 
 /**
  * GET /reports/:id
- * Hent én rapport + bilder (kun hvis brukeren eier den)
  */
 router.get("/:id", requireUser, async (req, res) => {
   try {
@@ -261,9 +308,7 @@ router.get("/:id", requireUser, async (req, res) => {
       .eq("user_id", user.id)
       .single();
 
-    if (rErr || !report) {
-      return res.status(404).json({ error: "Report not found" });
-    }
+    if (rErr || !report) return res.status(404).json({ error: "Report not found" });
 
     const { data: images, error: iErr } = await supaAdmin
       .from("report_images")
@@ -271,15 +316,10 @@ router.get("/:id", requireUser, async (req, res) => {
       .eq("report_id", reportId)
       .order("sort_order", { ascending: true });
 
-    if (iErr) {
-      return res.status(400).json({ error: iErr.message });
-    }
-
+    if (iErr) return res.status(400).json({ error: iErr.message });
     return res.json({ report, images: images || [] });
   } catch (e) {
-    return res.status(500).json({
-      error: e?.message ?? "Server error",
-    });
+    return res.status(500).json({ error: e?.message ?? "Server error" });
   }
 });
 

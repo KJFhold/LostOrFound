@@ -35,10 +35,6 @@ type Report = {
   lat?: number | null;
   lng?: number | null;
   location_label?: string | null;
-  status?: "ACTIVE" | "CLOSED" | "EXPIRED" | "ARCHIVED" | string | null;
-  visible_until?: string | null;
-  closed_at?: string | null;
-  archived_at?: string | null;
 };
 
 type LastActivity = {
@@ -198,6 +194,15 @@ function prettyReportTitle(r: Report, language: "no" | "en") {
   return `${typ}: ${core}${tail}${place}`;
 }
 
+function reportStatusInfo(r: Report, language: "no" | "en") {
+  if ((r as any).closed_at || (r as any).status === "CLOSED") return { label: language === "en" ? "Closed" : "Avsluttet" };
+  if ((r as any).status === "EXPIRED" || ((r as any).visible_until && Date.parse((r as any).visible_until) <= Date.now())) return { label: language === "en" ? "Expired" : "Utløpt" };
+  if ((r as any).visible_until) {
+    const daysLeft = Math.ceil((Date.parse((r as any).visible_until) - Date.now()) / (24 * 60 * 60 * 1000));
+    if (Number.isFinite(daysLeft) && daysLeft >= 0) return { label: language === "en" ? `Active · ${daysLeft} d left` : `Aktiv · ${daysLeft} d igjen` };
+  }
+  return { label: language === "en" ? "Active" : "Aktiv" };
+}
 function shortMessage(body?: string) {
   if (!body) return "";
   const t = body.replace(/\s+/g, " ").trim();
@@ -210,28 +215,6 @@ function formatTime(iso?: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function reportStatusInfo(r: Report, language: "no" | "en") {
-  if (r.closed_at || r.status === "CLOSED") {
-    return { label: language === "en" ? "Closed" : "Avsluttet", tone: "closed" as const };
-  }
-  if (r.archived_at || r.status === "ARCHIVED") {
-    return { label: language === "en" ? "Archived" : "Arkivert", tone: "archived" as const };
-  }
-  if (r.status === "EXPIRED" || (r.visible_until && Date.parse(r.visible_until) <= Date.now())) {
-    return { label: language === "en" ? "Expired" : "Utløpt", tone: "expired" as const };
-  }
-  if (r.visible_until) {
-    const daysLeft = Math.ceil((Date.parse(r.visible_until) - Date.now()) / (24 * 60 * 60 * 1000));
-    if (Number.isFinite(daysLeft) && daysLeft >= 0) {
-      return {
-        label: language === "en" ? `Active · ${daysLeft} d left` : `Aktiv · ${daysLeft} d igjen`,
-        tone: "active" as const,
-      };
-    }
-  }
-  return { label: language === "en" ? "Active" : "Aktiv", tone: "active" as const };
 }
 
 function sortReportsByActivity(reports: Report[], activityByReport: Record<string, LastActivity | null>) {
@@ -452,45 +435,6 @@ export default function MyReportsScreen() {
     load();
   };
 
-  
-  const closeReport = async (r: Report) => {
-    const { data: sess } = await supabase.auth.getSession();
-    const token = sess.session?.access_token;
-    if (!token) {
-      Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        language === "en" ? "You must be logged in to close this case." : "Du må være innlogget for å avslutte saken."
-      );
-      return;
-    }
-    const res = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(r.id)}/close`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        data?.message || data?.error || (language === "en" ? "Could not close case." : "Kunne ikke avslutte saken.")
-      );
-      return;
-    }
-    load();
-  };
-
-  const confirmClose = (r: Report) => {
-    Alert.alert(
-      language === "en" ? "Close case?" : "Avslutt sak?",
-      language === "en"
-        ? "This keeps the case in your overview, but it will no longer be used for new matches."
-        : "Saken beholdes i oversikten, men brukes ikke lenger for nye treff.",
-      [
-        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-        { text: language === "en" ? "Close case" : "Avslutt sak", onPress: () => closeReport(r) },
-      ]
-    );
-  };
-
   const confirmDelete = (r: Report) => {
     Alert.alert(
       language === "en" ? "Delete case?" : "Slett sak?",
@@ -540,8 +484,6 @@ export default function MyReportsScreen() {
               const actLine = act
                 ? `${language === "en" ? "Latest" : "Sist"}: ${actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} ${formatTime(act.at)}: ${shortMessage(act.body)}`
                 : null;
-              const statusInfo = reportStatusInfo(r, language);
-              const isClosed = r.status === "CLOSED" || !!r.closed_at;
               return (
                 <View key={r.id} style={styles.card}>
                   <Pressable onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}>
@@ -553,7 +495,6 @@ export default function MyReportsScreen() {
                         {(matchCountByReport[r.id] ?? 0)} {language === "en" ? "match(es)" : "treff"}
                       </Text>
                     </View>
-                    <Text style={[styles.statusPill, reportStatusStyle(statusInfo.tone)]}>{statusInfo.label}</Text>
                     <Text style={styles.title}>{prettyReportTitle(r, language)}</Text>
                     <Text style={styles.meta}>{new Date(r.created_at).toLocaleDateString()}</Text>
                     {actLine && (
@@ -565,14 +506,9 @@ export default function MyReportsScreen() {
                     <Text style={styles.link}>{language === "en" ? "Open matches for this case →" : "Åpne treff for denne saken →"}</Text>
                   </Pressable>
                   <View style={styles.actionsRow}>
-                    {r.type === "LOST" && !isClosed && (
+                    {r.type === "LOST" && (
                       <Pressable style={styles.editBtn} onPress={() => editReport(r)}>
                         <Text style={styles.editTxt}>{language === "en" ? "Edit" : "Rediger"}</Text>
-                      </Pressable>
-                    )}
-                    {!isClosed && (
-                      <Pressable style={styles.closeBtn} onPress={() => confirmClose(r)}>
-                        <Text style={styles.closeTxt}>{language === "en" ? "Close" : "Avslutt"}</Text>
                       </Pressable>
                     )}
                     <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(r)}>
@@ -626,21 +562,19 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 12,
   },
+  title: { fontWeight: "900", fontSize: 16, color: theme.colors.text },
   statusPill: {
     alignSelf: "flex-start",
     overflow: "hidden",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+    color: "#334155",
     fontWeight: "900",
     fontSize: 12,
     marginBottom: 8,
   },
-  status_active: { backgroundColor: "#DCFCE7", color: "#166534" },
-  status_closed: { backgroundColor: "#E5E7EB", color: "#374151" },
-  status_expired: { backgroundColor: "#FEF3C7", color: "#92400E" },
-  status_archived: { backgroundColor: "#E0E7FF", color: "#3730A3" },
-  title: { fontWeight: "900", fontSize: 16, color: theme.colors.text },
   meta: { marginTop: 4, color: theme.colors.muted, fontWeight: "600" },
   lastLine: { marginTop: 6, color: "#111", fontWeight: "700" },
   link: { marginTop: 8, color: theme.colors.primary, fontWeight: "800" },
@@ -655,15 +589,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2FF",
   },
   editTxt: { color: theme.colors.primary, fontWeight: "900" },
-  closeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#64748B",
-    backgroundColor: "#F8FAFC",
-  },
-  closeTxt: { color: "#334155", fontWeight: "900" },
   deleteBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,

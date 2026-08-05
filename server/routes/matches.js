@@ -49,6 +49,7 @@ const MATCH_SELECT = `
    id, user_id, type, category, subcategory_key, title, description, color, brand,
    occurred_at, created_at, lat, lng, location_label,
    radius_m, search_radius_m, area_radius_m, location_radius_m,
+   status, visible_until, closed_at, archived_at,
    reward_ore,
    report_images ( id, path, sort_order, created_at )
  ),
@@ -56,6 +57,7 @@ const MATCH_SELECT = `
    id, user_id, type, category, subcategory_key, title, description, color, brand,
    occurred_at, created_at, lat, lng, location_label,
    radius_m, search_radius_m, area_radius_m, location_radius_m,
+   status, visible_until, closed_at, archived_at,
    reward_ore,
    report_images ( id, path, sort_order, created_at )
  )
@@ -102,6 +104,14 @@ function reportRadiusMeters(rep) {
   return null;
 }
 
+
+function isActiveReport(rep) {
+  if (!rep) return false;
+  if (rep.status && rep.status !== "ACTIVE") return false;
+  if (rep.closed_at || rep.archived_at) return false;
+  if (rep.visible_until && Date.parse(rep.visible_until) <= Date.now()) return false;
+  return true;
+}
 function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -190,6 +200,7 @@ router.get("/", requireUser, async (req, res) => {
     if (mErr) return res.status(400).json({ error: mErr.message });
 
     const filtered = (matches || [])
+      .filter((m) => isActiveReport(m?.lost) && isActiveReport(m?.found))
       .filter((m) => isTimeCompatible(m?.lost, m?.found))
       .map(enrichMatchAreaInfo);
 
@@ -216,7 +227,10 @@ router.get("/:id", requireUser, async (req, res) => {
     const owns = match?.lost?.user_id === user.id || match?.found?.user_id === user.id;
     if (!owns) return res.status(403).json({ error: "Not allowed" });
 
-    // Hard stop: skjul tidsmessig umulige matcher
+    // Hard stop: skjul lukkede/utløpte/arkiverte og tidsmessig umulige matcher
+    if (!isActiveReport(match?.lost) || !isActiveReport(match?.found)) {
+      return res.status(404).json({ error: "Match not found" });
+    }
     if (!isTimeCompatible(match?.lost, match?.found)) {
       return res.status(404).json({ error: "Match not found" });
     }

@@ -56,6 +56,29 @@ function toIntegerOrNull(v) {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
+function reportVisibilityDays(type) {
+  return String(type).toUpperCase() === "FOUND" ? 30 : 7;
+}
+
+function visibleUntilForType(type) {
+  const days = reportVisibilityDays(type);
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function isReportActiveForMatching(report) {
+  if (!report) return false;
+  if (report.status && report.status !== "ACTIVE") return false;
+  if (report.closed_at || report.archived_at) return false;
+  if (report.visible_until && Date.parse(report.visible_until) <= Date.now()) return false;
+  return true;
+}
+
+function isMatchActiveForMatching(match) {
+  return isReportActiveForMatching(match?.lost) && isReportActiveForMatching(match?.found);
+}
+
+const MATCH_WITH_STATUS_SELECT = "id, score, status, reasons, lost_id, found_id, lost:lost_id(id,status,visible_until,closed_at,archived_at), found:found_id(id,status,visible_until,closed_at,archived_at)";
+
 async function safeDelete(queryBuilder, label, results) {
   try {
     const { error } = await queryBuilder;
@@ -125,13 +148,19 @@ function normalizeReportPatch(body) {
   if ("radius_m" in input) patch.radius_m = toIntegerOrNull(input.radius_m);
   if ("search_radius_m" in input) patch.search_radius_m = toIntegerOrNull(input.search_radius_m);
   if ("area_radius_m" in input) patch.area_radius_m = toIntegerOrNull(input.area_radius_m);
-  if ("location_radius_m, critical_edit_count, last_critical_edit_at, edit_locked_until" in input) patch.location_radius_m = toIntegerOrNull(input.location_radius_m);
+  if ("location_radius_m" in input) patch.location_radius_m = toIntegerOrNull(input.location_radius_m);
 
   // Never allow these to be changed by client PATCH.
   delete patch.id;
   delete patch.user_id;
   delete patch.type;
   delete patch.created_at;
+  delete patch.status;
+  delete patch.visible_until;
+  delete patch.closed_at;
+  delete patch.archived_at;
+  delete patch.last_extended_at;
+  delete patch.extension_count;
 
   return patch;
 }
@@ -143,7 +172,7 @@ function changed(a, b) {
 }
 
 function detectCriticalChanges(existing, patch) {
-  const criticalFields = ["category", "subcategory_key", "subcategory_custom", "occurred_at", "lat", "lng", "radius_m", "search_radius_m", "area_radius_m", "location_radius_m, critical_edit_count, last_critical_edit_at, edit_locked_until"];
+  const criticalFields = ["category", "subcategory_key", "subcategory_custom", "occurred_at", "lat", "lng", "radius_m", "search_radius_m", "area_radius_m", "location_radius_m"];
   const changedFields = [];
   const criticalChangedFields = [];
 
@@ -209,6 +238,8 @@ router.post("/", requireUser, async (req, res) => {
     const insertPayload = {
       user_id: user.id,
       type,
+      status: "ACTIVE",
+      visible_until: visibleUntilForType(type),
       category,
       subcategory_key: subcategory_key || null,
       subcategory_custom: subcategory_custom || null,
@@ -242,12 +273,12 @@ router.post("/", requireUser, async (req, res) => {
       const matchColumn = data.type === "LOST" ? "lost_id" : "found_id";
       const { data: matchRows, error: matchErr } = await supaAdmin
         .from("matches")
-        .select("id, score, status, reasons, lost_id, found_id")
+        .select(MATCH_WITH_STATUS_SELECT)
         .eq(matchColumn, data.id)
         .order("score", { ascending: false });
 
       if (matchErr) console.warn("[reports] fetch candidates failed", matchErr.message);
-      else candidates = matchRows || [];
+      else candidates = (matchRows || []).filter(isMatchActiveForMatching);
     } catch (rpcErr) {
       console.warn("[reports] refresh_matches_for_report failed", rpcErr?.message ?? rpcErr);
     }
@@ -268,7 +299,7 @@ router.get("/mine", requireUser, async (req, res) => {
     const { data, error } = await supaAdmin
       .from("reports")
       .select(
-        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, radius_m, search_radius_m, area_radius_m, location_radius_m, critical_edit_count, last_critical_edit_at, edit_locked_until"
+        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, radius_m, search_radius_m, area_radius_m, location_radius_m, status, visible_until, closed_at, archived_at, critical_edit_count, last_critical_edit_at, edit_locked_until"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -384,12 +415,12 @@ router.patch("/:id", requireUser, async (req, res) => {
         const matchColumn = updated.type === "LOST" ? "lost_id" : "found_id";
         const { data: matchRows, error: matchErr } = await supaAdmin
           .from("matches")
-          .select("id, score, status, reasons, lost_id, found_id")
+          .select(MATCH_WITH_STATUS_SELECT)
           .eq(matchColumn, reportId)
           .order("score", { ascending: false });
 
         if (matchErr) console.warn("[reports] fetch refreshed candidates failed", matchErr.message);
-        else candidates = matchRows || [];
+        else candidates = (matchRows || []).filter(isMatchActiveForMatching);
       } catch (rpcErr) {
         console.warn("[reports] refresh_matches_for_report after edit failed", rpcErr?.message ?? rpcErr);
       }
@@ -408,6 +439,63 @@ router.patch("/:id", requireUser, async (req, res) => {
       cleanup,
       candidates,
     });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
+
+
+/**
+ * POST /reports/:id/close
+ * Avslutt/lukk rapport uten å slette den. Lukkede rapporter skal ikke matches videre.
+ */
+router.post("/:id/close", requireUser, async (req, res) => {
+  try {
+    const user = req.user;
+    const reportId = req.params.id;
+
+    const { data: existing, error: rErr } = await supaAdmin
+      .from("reports")
+      .select("*")
+      .eq("id", reportId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (rErr) return res.status(400).json({ error: rErr.message });
+    if (!existing) return res.status(404).json({ error: "Report not found" });
+
+    if (existing.status === "CLOSED" || existing.closed_at) {
+      return res.json({ ok: true, report: existing, alreadyClosed: true });
+    }
+
+    const nowIso = new Date().toISOString();
+    const cleanup = await cleanupMatchesForReport(reportId);
+
+    const { data: updated, error: uErr } = await supaAdmin
+      .from("reports")
+      .update({ status: "CLOSED", closed_at: nowIso })
+      .eq("id", reportId)
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+
+    if (uErr) return res.status(400).json({ error: uErr.message });
+
+    try {
+      await supaAdmin.from("report_edits").insert({
+        report_id: reportId,
+        user_id: user.id,
+        changed_fields: ["status", "closed_at"],
+        critical_fields: [],
+        is_critical: false,
+        before: existing,
+        after: updated,
+      });
+    } catch (logErr) {
+      console.warn("[reports] report_edits close insert failed", logErr?.message ?? logErr);
+    }
+
+    return res.json({ ok: true, report: updated, cleanup });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }

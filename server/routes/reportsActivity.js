@@ -26,6 +26,14 @@ if (!supaAdmin || typeof supaAdmin.from !== "function") {
   );
 }
 
+function isActiveReport(rep) {
+  if (!rep) return false;
+  if (rep.status && rep.status !== "ACTIVE") return false;
+  if (rep.closed_at || rep.archived_at) return false;
+  if (rep.visible_until && Date.parse(rep.visible_until) <= Date.now()) return false;
+  return true;
+}
+
 router.get("/mine/with-activity", requireUser, async (req, res) => {
   try {
     const user = req.user;
@@ -34,7 +42,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     const { data: reports, error: rErr } = await supaAdmin
       .from("reports")
       .select(
-        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label"
+        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, status, visible_until, closed_at, archived_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });

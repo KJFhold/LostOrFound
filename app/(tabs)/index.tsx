@@ -43,7 +43,12 @@ export default function DashboardScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.brandRow}>
-            <Image source={require("../../assets/images/icon.png")} style={styles.logo} />
+            <Image
+              source={require("../../assets/images/icon.png")}
+              style={styles.logo}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
             <View style={styles.headerText}>
               <Text style={styles.brand}>Lost or Found</Text>
               <Text style={styles.greeting}>{t("dashboard.greeting")}</Text>
@@ -111,20 +116,23 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   header: {
+    minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingVertical: 6,
   },
   brandRow: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    marginRight: 12,
   },
   logo: {
-    width: 48,
-    height: 48,
-    borderRadius: 13,
-    marginRight: 12,
+    width: 64,
+    height: 64,
+    borderRadius: 17,
+    marginRight: 14,
   },
   headerText: {
     flex: 1,
@@ -132,13 +140,15 @@ const styles = StyleSheet.create({
   brand: {
     color: theme.colors.text,
     fontWeight: "900",
-    fontSize: 20,
+    fontSize: 24,
+    lineHeight: 29,
   },
   greeting: {
-    marginTop: 2,
+    marginTop: 4,
     color: theme.colors.muted,
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: 15,
+    lineHeight: 19,
   },
   guestCard: {
     marginTop: 16,

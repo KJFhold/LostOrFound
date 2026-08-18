@@ -30,6 +30,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="cases"
         options={{
@@ -39,6 +40,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="report"
         listeners={{
@@ -57,15 +59,18 @@ export default function TabsLayout() {
           tabBarLabelStyle: [styles.label, styles.reportLabel],
         }}
       />
+
       <Tabs.Screen
-        name="matches"
+        name="notifications"
         options={{
-          title: t("tabs.matches"),
+          title: t("notifications.title"),
+          tabBarBadge: undefined,
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "sparkles" : "sparkles-outline"} color={color} size={size} />
+            <Ionicons name={focused ? "notifications" : "notifications-outline"} color={color} size={size} />
           ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
@@ -75,6 +80,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen name="matches" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -88,8 +95,13 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.card,
   },
-  label: { fontSize: 11, fontWeight: "800" },
-  reportLabel: { marginTop: 5 },
+  label: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  reportLabel: {
+    marginTop: 5,
+  },
   reportButton: {
     width: 54,
     height: 54,

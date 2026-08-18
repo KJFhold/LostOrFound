@@ -61,72 +61,39 @@ export default function DashboardScreen() {
 
         <Text style={styles.sectionTitle}>{t("dashboard.whatToDo")}</Text>
 
-        <View style={styles.actionRow}>
-          <Pressable
-            style={({ pressed }) => [styles.actionCard, styles.lostCard, pressed && styles.pressed]}
-            onPress={openLost}
-            accessibilityRole="button"
-            accessibilityLabel={t("dashboard.lostCta")}
-          >
-            <View style={[styles.iconCircle, styles.lostIcon]}>
-              <Ionicons name="search-outline" size={28} color="#B45309" />
-            </View>
+        <Pressable
+          style={({ pressed }) => [styles.actionCard, styles.lostCard, pressed && styles.pressed]}
+          onPress={openLost}
+          accessibilityRole="button"
+          accessibilityLabel={t("dashboard.lostCta")}
+        >
+          <View style={[styles.iconCircle, styles.lostIcon]}>
+            <Ionicons name="search-outline" size={28} color="#B45309" />
+          </View>
+          <View style={styles.actionText}>
             <Text style={styles.actionTitle}>{t("dashboard.lostTitle")}</Text>
             <Text style={styles.actionBody}>{t("dashboard.lostBody")}</Text>
             <Text style={styles.actionLink}>{t("dashboard.lostCta")}</Text>
-          </Pressable>
+          </View>
+          <Ionicons name="chevron-forward" size={23} color="#B45309" />
+        </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [styles.actionCard, styles.foundCard, pressed && styles.pressed]}
-            onPress={openFound}
-            accessibilityRole="button"
-            accessibilityLabel={t("dashboard.foundCta")}
-          >
-            <View style={[styles.iconCircle, styles.foundIcon]}>
-              <Ionicons name="checkmark-circle-outline" size={28} color="#15803D" />
-            </View>
+        <Pressable
+          style={({ pressed }) => [styles.actionCard, styles.foundCard, pressed && styles.pressed]}
+          onPress={openFound}
+          accessibilityRole="button"
+          accessibilityLabel={t("dashboard.foundCta")}
+        >
+          <View style={[styles.iconCircle, styles.foundIcon]}>
+            <Ionicons name="checkmark-circle-outline" size={28} color="#15803D" />
+          </View>
+          <View style={styles.actionText}>
             <Text style={styles.actionTitle}>{t("dashboard.foundTitle")}</Text>
             <Text style={styles.actionBody}>{t("dashboard.foundBody")}</Text>
             <Text style={styles.actionLink}>{t("dashboard.foundCta")}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.quickCard}>
-          <View style={styles.quickHeader}>
-            <Text style={styles.sectionTitleNoMargin}>{t("dashboard.quickTitle")}</Text>
           </View>
-
-          <Pressable style={styles.quickItem} onPress={() => router.push("/my-reports")}>
-            <Ionicons name="folder-open-outline" size={24} color={theme.colors.primary} />
-            <View style={styles.quickText}>
-              <Text style={styles.quickTitle}>{t("dashboard.casesTitle")}</Text>
-              <Text style={styles.quickBody}>{t("dashboard.casesBody")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable style={styles.quickItem} onPress={() => router.push("/notifications")}>
-            <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
-            <View style={styles.quickText}>
-              <Text style={styles.quickTitle}>{t("dashboard.notificationsTitle")}</Text>
-              <Text style={styles.quickBody}>{t("dashboard.notificationsBody")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable style={styles.quickItem} onPress={() => router.push("/how")}>
-            <Ionicons name="help-circle-outline" size={24} color={theme.colors.primary} />
-            <View style={styles.quickText}>
-              <Text style={styles.quickTitle}>{t("dashboard.howTitle")}</Text>
-              <Text style={styles.quickBody}>{t("dashboard.howBody")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
-          </Pressable>
-        </View>
+          <Ionicons name="chevron-forward" size={23} color="#15803D" />
+        </Pressable>
 
         <Text style={styles.safety}>{t("dashboard.safety")}</Text>
       </ScrollView>
@@ -197,22 +164,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 18,
   },
-  sectionTitleNoMargin: {
-    color: theme.colors.text,
-    fontWeight: "900",
-    fontSize: 18,
-  },
-  actionRow: {
-    flexDirection: "row",
-    marginHorizontal: -5,
-  },
   actionCard: {
-    flex: 1,
-    minHeight: 210,
-    marginHorizontal: 5,
-    padding: 15,
+    minHeight: 132,
+    marginBottom: 12,
+    padding: 16,
     borderRadius: 20,
     borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
   },
   lostCard: {
     backgroundColor: "#FFFBEB",
@@ -223,12 +182,12 @@ const styles = StyleSheet.create({
     borderColor: "#BBF7D0",
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginRight: 14,
   },
   lostIcon: {
     backgroundColor: "#FEF3C7",
@@ -236,62 +195,27 @@ const styles = StyleSheet.create({
   foundIcon: {
     backgroundColor: "#DCFCE7",
   },
+  actionText: {
+    flex: 1,
+  },
   actionTitle: {
     color: theme.colors.text,
     fontSize: 17,
     fontWeight: "900",
   },
   actionBody: {
-    flex: 1,
-    marginTop: 7,
+    marginTop: 5,
     color: theme.colors.muted,
     lineHeight: 19,
     fontWeight: "600",
   },
   actionLink: {
-    marginTop: 12,
+    marginTop: 9,
     color: theme.colors.primary,
     fontWeight: "900",
   },
-  quickCard: {
-    marginTop: 24,
-    backgroundColor: theme.colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 16,
-    ...theme.shadow.card,
-  },
-  quickHeader: {
-    marginBottom: 6,
-  },
-  quickItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-  },
-  quickText: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  quickTitle: {
-    color: theme.colors.text,
-    fontWeight: "900",
-    fontSize: 15,
-  },
-  quickBody: {
-    marginTop: 3,
-    color: theme.colors.muted,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginLeft: 36,
-  },
   safety: {
-    marginTop: 20,
+    marginTop: 18,
     paddingHorizontal: 12,
     color: theme.colors.muted,
     textAlign: "center",

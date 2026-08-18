@@ -39,6 +39,8 @@ type Report = {
   visible_until?: string | null;
   closed_at?: string | null;
   archived_at?: string | null;
+  last_extended_at?: string | null;
+  extension_count?: number | null;
 };
 
 type LastActivity = {
@@ -208,6 +210,14 @@ function reportStatusInfo(r: Report, language: "no" | "en") {
   }
   return { label: language === "en" ? "Active" : "Aktiv" };
 }
+function canExtendFound(r: Report) {
+  if (r.type !== "FOUND" || r.closed_at || r.status === "CLOSED" || r.status === "ARCHIVED") return false;
+  if (Number(r.extension_count || 0) >= 2) return false;
+  const until = Date.parse(r.visible_until || "");
+  if (!Number.isFinite(until)) return true;
+  return until - Date.now() <= 7 * 24 * 60 * 60 * 1000;
+}
+
 function shortMessage(body?: string) {
   if (!body) return "";
   const t = body.replace(/\s+/g, " ").trim();
@@ -443,6 +453,42 @@ export default function MyReportsScreen() {
   };
 
 
+  const extendFoundReport = async (r: Report) => {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) {
+      Alert.alert(language === "en" ? "Error" : "Feil", language === "en" ? "You must be logged in." : "Du må være innlogget.");
+      return;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(r.id)}/extend-found`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      Alert.alert(
+        language === "en" ? "Could not extend" : "Kunne ikke forlenge",
+        data?.message || data?.error || (language === "en" ? "Please try again later." : "Prøv igjen senere.")
+      );
+      return;
+    }
+    await load();
+  };
+
+  const confirmExtendFound = (r: Report) => {
+    Alert.alert(
+      language === "en" ? "Still have the item?" : "Har du fortsatt gjenstanden?",
+      language === "en"
+        ? "This keeps the found report active for up to 30 more days. A found report can be active for a maximum of 90 days."
+        : "Dette holder funnet-rapporten aktiv i opptil 30 nye dager. En funnet-rapport kan være aktiv i maksimalt 90 dager.",
+      [
+        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
+        { text: language === "en" ? "Extend" : "Forleng", onPress: () => extendFoundReport(r) },
+      ]
+    );
+  };
+
   const closeReport = async (r: Report) => {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
@@ -547,6 +593,13 @@ export default function MyReportsScreen() {
                       </Text>
                     </View>
                     {statusInfo?.label && <Text style={styles.statusPill}>{statusInfo.label}</Text>}
+                    {r.type === "FOUND" && (
+                      <Text style={styles.extensionInfo}>
+                        {language === "en"
+                          ? `${Number(r.extension_count || 0)} of 2 extensions used`
+                          : `${Number(r.extension_count || 0)} av 2 forlengelser brukt`}
+                      </Text>
+                    )}
                     <Text style={styles.title}>{prettyReportTitle(r, language)}</Text>
                     <Text style={styles.meta}>{new Date(r.created_at).toLocaleDateString()}</Text>
                     {actLine && (
@@ -566,6 +619,11 @@ export default function MyReportsScreen() {
                     {r.type === "LOST" && !isClosed && (
                       <Pressable style={styles.editBtn} onPress={() => editReport(r)}>
                         <Text style={styles.editTxt}>{language === "en" ? "Edit" : "Rediger"}</Text>
+                      </Pressable>
+                    )}
+                    {canExtendFound(r) && (
+                      <Pressable style={styles.extendBtn} onPress={() => confirmExtendFound(r)}>
+                        <Text style={styles.extendTxt}>{language === "en" ? "Still have item" : "Har fortsatt gjenstanden"}</Text>
                       </Pressable>
                     )}
                     {!isClosed && (
@@ -637,6 +695,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 8,
   },
+  extensionInfo: { marginBottom: 7, color: theme.colors.muted, fontWeight: "700", fontSize: 12 },
   meta: { marginTop: 4, color: theme.colors.muted, fontWeight: "600" },
   lastLine: { marginTop: 6, color: "#111", fontWeight: "700" },
   link: { marginTop: 8, color: theme.colors.primary, fontWeight: "800" },
@@ -650,7 +709,7 @@ const styles = StyleSheet.create({
   },
   chatTxt: { color: "#fff", fontWeight: "900" },
   unread: { marginTop: 6, color: theme.colors.primary, fontWeight: "900" },
-  actionsRow: { marginTop: 12, flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+  actionsRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   editBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -660,6 +719,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2FF",
   },
   editTxt: { color: theme.colors.primary, fontWeight: "900" },
+  extendBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#16A34A",
+    backgroundColor: "#F0FDF4",
+  },
+  extendTxt: { color: "#15803D", fontWeight: "900", fontSize: 12 },
   closeBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,

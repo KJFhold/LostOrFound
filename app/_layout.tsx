@@ -1,35 +1,69 @@
-import { useEffect } from "react";
-import { LogBox } from "react-native";
-import { Stack } from "expo-router";
-import { StripeProvider } from "@stripe/stripe-react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+﻿// app/_layout.tsx
+import React from "react";
+import { Stack, usePathname, useRouter } from "expo-router";
+import { Pressable, Text } from "react-native";
+import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
+import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
+import { ReportDraftProvider } from "../src/contexts/ReportDraftContext";
 
-// Viktig: hent base-URL ett sted som alltid lastes
-import { API_BASE_URL } from "../src/lib/config";
+function HeaderRight() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { session, loading, signOut } = useAuth();
+  const { t } = useI18n();
 
-export default function RootLayout() {
-  // Logg base-URL én gang på app-start (vises i Metro-konsollen)
-  useEffect(() => {
-    if (__DEV__) {
-      console.log("API_BASE_URL brukt i appen:", API_BASE_URL);
-    }
-  }, []);
+  if (loading) return null;
 
-  // Demp ufarlig dev-warning fra Stripe i Android/Expo
-  if (__DEV__) {
-    LogBox.ignoreLogs(["No task registered for key StripeKeepJsAwakeTask"]);
+  const goLogin = () => {
+    router.push({
+      pathname: "/(auth)/login",
+      params: { returnTo: pathname ?? "/start" },
+    });
+  };
+
+  const logout = async () => {
+    await signOut();
+    router.replace("/(auth)/login");
+  };
+
+  if (!session) {
+    return (
+      <Pressable onPress={goLogin} style={{ paddingHorizontal: 12 }}>
+        <Text style={{ color: "#1a73e8", fontWeight: "700" }}>{t("common.login")}</Text>
+      </Pressable>
+    );
   }
 
   return (
-    <SafeAreaProvider>
-      <StripeProvider
-        publishableKey="pk_test_51T9RIHCwN6R5FCzMGdSj8uYEcjfM8vV36NbgHxzXJd1KuItZUeZndobRPW4Bfn0sSK6grdR4lrBsNbF7Zkelc7NR00wlTRyi5L"
-        // Disse to er trygge i dev (matcher app.json)
-        urlScheme="lostorfound"
-        merchantIdentifier="merchant.com.anonymous.repairlostorfound"
-      >
-        <Stack />
-      </StripeProvider>
-    </SafeAreaProvider>
+    <Pressable onPress={logout} style={{ paddingHorizontal: 12 }}>
+      <Text style={{ color: "#1a73e8", fontWeight: "700" }}>{t("common.logout")}</Text>
+    </Pressable>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <I18nProvider>
+      <AuthProvider>
+        <ReportDraftProvider>
+          <Stack
+            screenOptions={{
+              headerRight: () => <HeaderRight />,
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(report)" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="my-reports" options={{ headerShown: false }} />
+            <Stack.Screen name="match" options={{ headerShown: false }} />
+            <Stack.Screen name="matches/[matchId]" options={{ headerShown: false }} />
+            <Stack.Screen name="chat/[matchId]" options={{ headerShown: false }} />
+            <Stack.Screen name="notifications" options={{ headerShown: false }} />
+            <Stack.Screen name="start" options={{ headerShown: false }} />
+          </Stack>
+        </ReportDraftProvider>
+      </AuthProvider>
+    </I18nProvider>
   );
 }

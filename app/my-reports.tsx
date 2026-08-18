@@ -35,12 +35,17 @@ type Report = {
   lat?: number | null;
   lng?: number | null;
   location_label?: string | null;
+  status?: "ACTIVE" | "CLOSED" | "EXPIRED" | "ARCHIVED" | string | null;
+  visible_until?: string | null;
+  closed_at?: string | null;
+  archived_at?: string | null;
 };
 
 type LastActivity = {
   at: string;
   sender_id: string;
   body: string;
+  match_id?: string;
 };
 
 type MessageInsert = {
@@ -284,6 +289,7 @@ export default function MyReportsScreen() {
           at: String(row.created_at),
           sender_id: String(row.sender_id),
           body: String(row.body ?? ""),
+          match_id: mid,
         };
       }
 
@@ -354,6 +360,7 @@ export default function MyReportsScreen() {
             at: msg.created_at,
             sender_id: msg.sender_id,
             body: String(msg.body ?? ""),
+            match_id: msg.conversation_id,
           };
 
           if (msg.sender_id !== user.id) {
@@ -435,6 +442,47 @@ export default function MyReportsScreen() {
     load();
   };
 
+
+  const closeReport = async (r: Report) => {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) {
+      Alert.alert(
+        language === "en" ? "Error" : "Feil",
+        language === "en" ? "You must be logged in to close this case." : "Du må være innlogget for å avslutte saken."
+      );
+      return;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(r.id)}/close`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      Alert.alert(
+        language === "en" ? "Error" : "Feil",
+        data?.message || data?.error || (language === "en" ? "Could not close case." : "Kunne ikke avslutte saken.")
+      );
+      return;
+    }
+
+    load();
+  };
+
+  const confirmClose = (r: Report) => {
+    Alert.alert(
+      language === "en" ? "Close case?" : "Avslutt sak?",
+      language === "en"
+        ? "The case remains in your overview, but it will not be used for new matches."
+        : "Saken beholdes i oversikten, men brukes ikke lenger for nye treff.",
+      [
+        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
+        { text: language === "en" ? "Close case" : "Avslutt sak", onPress: () => closeReport(r) },
+      ]
+    );
+  };
+
   const confirmDelete = (r: Report) => {
     Alert.alert(
       language === "en" ? "Delete case?" : "Slett sak?",
@@ -456,10 +504,10 @@ export default function MyReportsScreen() {
           title={language === "en" ? "My cases" : "Mine saker"}
           subtitle={language === "en" ? "Overview and latest activity" : "Oversikt og siste aktivitet"}
           onBack={() => {
-            try {
-              router.back();
-            } catch {}
-          }}
+
+ router.replace("/(tabs)");
+
+}}
           right={<AuthHeaderAction />}
         />
 
@@ -482,8 +530,11 @@ export default function MyReportsScreen() {
               const act = activityByReport[r.id] ?? null;
               const actFromMe = act?.sender_id === user?.id;
               const actLine = act
-                ? `${language === "en" ? "Latest" : "Sist"}: ${actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} ${formatTime(act.at)}: ${shortMessage(act.body)}`
+                ? `${language === "en" ? "Latest chat" : "Siste chat"}: ${actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} ${formatTime(act.at)}: ${shortMessage(act.body)}`
                 : null;
+              const statusInfo = reportStatusInfo(r, language);
+              const isClosed = r.status === "CLOSED" || !!r.closed_at;
+              const latestChatId = act?.match_id;
               return (
                 <View key={r.id} style={styles.card}>
                   <Pressable onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}>
@@ -495,6 +546,7 @@ export default function MyReportsScreen() {
                         {(matchCountByReport[r.id] ?? 0)} {language === "en" ? "match(es)" : "treff"}
                       </Text>
                     </View>
+                    {statusInfo?.label && <Text style={styles.statusPill}>{statusInfo.label}</Text>}
                     <Text style={styles.title}>{prettyReportTitle(r, language)}</Text>
                     <Text style={styles.meta}>{new Date(r.created_at).toLocaleDateString()}</Text>
                     {actLine && (
@@ -505,10 +557,20 @@ export default function MyReportsScreen() {
                     {unreadByReport[r.id] && <Text style={styles.unread}>● {language === "en" ? "New message" : "Ny melding"}</Text>}
                     <Text style={styles.link}>{language === "en" ? "Open matches for this case →" : "Åpne treff for denne saken →"}</Text>
                   </Pressable>
+                  {latestChatId && (
+                    <Pressable style={styles.chatBtn} onPress={() => router.push(`/chat/${latestChatId}`)}>
+                      <Text style={styles.chatTxt}>{language === "en" ? "Open chat" : "Åpne chat"}</Text>
+                    </Pressable>
+                  )}
                   <View style={styles.actionsRow}>
-                    {r.type === "LOST" && (
+                    {r.type === "LOST" && !isClosed && (
                       <Pressable style={styles.editBtn} onPress={() => editReport(r)}>
                         <Text style={styles.editTxt}>{language === "en" ? "Edit" : "Rediger"}</Text>
+                      </Pressable>
+                    )}
+                    {!isClosed && (
+                      <Pressable style={styles.closeBtn} onPress={() => confirmClose(r)}>
+                        <Text style={styles.closeTxt}>{language === "en" ? "Close" : "Avslutt"}</Text>
                       </Pressable>
                     )}
                     <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(r)}>
@@ -578,6 +640,15 @@ const styles = StyleSheet.create({
   meta: { marginTop: 4, color: theme.colors.muted, fontWeight: "600" },
   lastLine: { marginTop: 6, color: "#111", fontWeight: "700" },
   link: { marginTop: 8, color: theme.colors.primary, fontWeight: "800" },
+  chatBtn: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+  },
+  chatTxt: { color: "#fff", fontWeight: "900" },
   unread: { marginTop: 6, color: theme.colors.primary, fontWeight: "900" },
   actionsRow: { marginTop: 12, flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   editBtn: {
@@ -589,6 +660,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2FF",
   },
   editTxt: { color: theme.colors.primary, fontWeight: "900" },
+  closeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#64748B",
+    backgroundColor: "#F8FAFC",
+  },
+  closeTxt: { color: "#334155", fontWeight: "900" },
   deleteBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,

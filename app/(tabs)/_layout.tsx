@@ -1,14 +1,52 @@
 ﻿// app/(tabs)/_layout.tsx
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Tabs, useRouter } from "expo-router";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../src/contexts/AuthContext";
 import { useI18n } from "../../src/i18n/I18nProvider";
+import { API_BASE_URL } from "../../src/lib/config";
+import { supabase } from "../../src/lib/supabase";
 import { theme } from "../../src/ui/theme";
+
+async function getUnreadCount(token: string): Promise<number> {
+  const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error ?? "Could not fetch unread notifications");
+  const count = Number(data?.count ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
 
 export default function TabsLayout() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { session } = useAuth();
   const { t } = useI18n();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnreadCount = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        setUnreadCount(0);
+        return;
+      }
+      setUnreadCount(await getUnreadCount(token));
+    } catch {
+      setUnreadCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setUnreadCount(0);
+      return;
+    }
+    refreshUnreadCount();
+  }, [session, pathname, refreshUnreadCount]);
 
   return (
     <Tabs
@@ -61,12 +99,19 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="notifications"
+        name="alerts"
+        listeners={{
+          tabPress: (event) => {
+            event.preventDefault();
+            router.push("/notifications");
+          },
+        }}
         options={{
           title: t("notifications.title"),
-          tabBarBadge: undefined,
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "notifications" : "notifications-outline"} color={color} size={size} />
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : undefined,
+          tabBarBadgeStyle: styles.badge,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications-outline" color={color} size={size} />
           ),
         }}
       />
@@ -82,6 +127,7 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen name="matches" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -113,5 +159,11 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: theme.colors.card,
     ...theme.shadow.card,
+  },
+  badge: {
+    backgroundColor: "#DC2626",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
   },
 });

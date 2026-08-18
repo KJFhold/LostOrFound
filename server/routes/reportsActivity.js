@@ -42,7 +42,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     const { data: reports, error: rErr } = await supaAdmin
       .from("reports")
       .select(
-        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, status, visible_until, closed_at, archived_at"
+        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, status, visible_until, closed_at, archived_at, last_extended_at, extension_count"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -60,20 +60,25 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     // 2) Hent alle matcher for disse rapportene (2 queries, så merge)
     const { data: lostMatches, error: lmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id")
+      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at)")
       .in("lost_id", reportIds);
     if (lmErr) return res.status(400).json({ error: lmErr.message });
 
     const { data: foundMatches, error: fmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id")
+      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at)")
       .in("found_id", reportIds);
     if (fmErr) return res.status(400).json({ error: fmErr.message });
 
     const merged = new Map();
     for (const m of (lostMatches || [])) merged.set(m.id, m);
     for (const m of (foundMatches || [])) merged.set(m.id, m);
-    const allMatches = Array.from(merged.values());
+    const allMatches = Array.from(merged.values()).filter(
+      (m) =>
+        isActiveReport(m?.lost) &&
+        isActiveReport(m?.found) &&
+        m?.lost?.user_id !== m?.found?.user_id
+    );
 
     // 3) Bygg matchId -> reportId map (for realtime mapping i app)
     // Hvis bruker (uvanlig) eier begge sider, velger vi lost_id først.

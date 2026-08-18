@@ -65,6 +65,61 @@ function visibleUntilForType(type) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function isAnonymousUser(user) {
+  if (!user) return false;
+  return (
+    user.is_anonymous === true ||
+    user.isAnonymous === true ||
+    user.app_metadata?.provider === "anonymous" ||
+    user.user_metadata?.is_anonymous === true
+  );
+}
+
+async function syncLifecycleForUser(userId) {
+  const nowIso = new Date().toISOString();
+  const foundArchiveCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+  const results = [];
+  const updates = [
+    supaAdmin.from("reports").update({ status: "EXPIRED" })
+      .eq("user_id", userId).eq("status", "ACTIVE").lt("visible_until", nowIso),
+    supaAdmin.from("reports").update({ status: "ARCHIVED", archived_at: nowIso })
+      .eq("user_id", userId).eq("type", "FOUND").in("status", ["ACTIVE", "EXPIRED"])
+      .lt("created_at", foundArchiveCutoff),
+  ];
+
+  for (const promise of updates) {
+    try {
+      const { error } = await promise;
+      if (error) results.push(error.message);
+    } catch (e) {
+      results.push(String(e?.message ?? e));
+    }
+  }
+  return results;
+}
+
+async function countRecentLostCreations(userId) {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supaAdmin
+    .from("report_creation_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("report_type", "LOST")
+    .gte("created_at", since);
+  if (error) throw error;
+  return Number(count ?? 0);
+}
+
+async function recordReportCreation(report, userId) {
+  const { error } = await supaAdmin.from("report_creation_events").insert({
+    report_id: report.id,
+    user_id: userId,
+    report_type: report.type,
+  });
+  if (error) throw error;
+}
+
 function isReportActiveForMatching(report) {
   if (!report) return false;
   if (report.status && report.status !== "ACTIVE") return false;
@@ -74,10 +129,14 @@ function isReportActiveForMatching(report) {
 }
 
 function isMatchActiveForMatching(match) {
-  return isReportActiveForMatching(match?.lost) && isReportActiveForMatching(match?.found);
+  return (
+    isReportActiveForMatching(match?.lost) &&
+    isReportActiveForMatching(match?.found) &&
+    match?.lost?.user_id !== match?.found?.user_id
+  );
 }
 
-const MATCH_WITH_STATUS_SELECT = "id, score, status, reasons, lost_id, found_id, lost:lost_id(id,status,visible_until,closed_at,archived_at), found:found_id(id,status,visible_until,closed_at,archived_at)";
+const MATCH_WITH_STATUS_SELECT = "id, score, status, reasons, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at)";
 
 async function safeDelete(queryBuilder, label, results) {
   try {
@@ -235,11 +294,35 @@ router.post("/", requireUser, async (req, res) => {
       });
     }
 
+    const normalizedType = String(type).toUpperCase();
+    if (normalizedType !== "LOST" && normalizedType !== "FOUND") {
+      return res.status(400).json({ error: "Invalid report type" });
+    }
+
+    if (normalizedType === "LOST" && isAnonymousUser(user)) {
+      return res.status(403).json({
+        error: "ACCOUNT_REQUIRED_FOR_LOST",
+        message: "Mistet-rapporter krever en vanlig konto. Gjest kan kun registrere funn.",
+      });
+    }
+
+    if (normalizedType === "LOST") {
+      const recentLostCount = await countRecentLostCreations(user.id);
+      if (recentLostCount >= 2) {
+        return res.status(429).json({
+          error: "LOST_REPORT_WEEKLY_LIMIT",
+          message: "Du kan opprette maksimalt to mistet-rapporter i løpet av syv dager.",
+          limit: 2,
+          window_days: 7,
+        });
+      }
+    }
+
     const insertPayload = {
       user_id: user.id,
-      type,
+      type: normalizedType,
       status: "ACTIVE",
-      visible_until: visibleUntilForType(type),
+      visible_until: visibleUntilForType(normalizedType),
       category,
       subcategory_key: subcategory_key || null,
       subcategory_custom: subcategory_custom || null,
@@ -265,6 +348,14 @@ router.post("/", requireUser, async (req, res) => {
       .single();
 
     if (error) return res.status(400).json({ error: error.message });
+
+    try {
+      await recordReportCreation(data, user.id);
+    } catch (auditErr) {
+      console.error("[reports] report_creation_events insert failed", auditErr?.message ?? auditErr);
+      await supaAdmin.from("reports").delete().eq("id", data.id).eq("user_id", user.id);
+      return res.status(500).json({ error: "Could not register report creation safely" });
+    }
 
     let candidates = [];
     try {
@@ -295,11 +386,12 @@ router.post("/", requireUser, async (req, res) => {
 router.get("/mine", requireUser, async (req, res) => {
   try {
     const user = req.user;
+    await syncLifecycleForUser(user.id);
 
     const { data, error } = await supaAdmin
       .from("reports")
       .select(
-        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, radius_m, search_radius_m, area_radius_m, location_radius_m, status, visible_until, closed_at, archived_at, critical_edit_count, last_critical_edit_at, edit_locked_until"
+        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, radius_m, search_radius_m, area_radius_m, location_radius_m, status, visible_until, closed_at, archived_at, last_extended_at, extension_count, critical_edit_count, last_critical_edit_at, edit_locked_until"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -444,6 +536,85 @@ router.patch("/:id", requireUser, async (req, res) => {
   }
 });
 
+
+/**
+ * POST /reports/:id/extend-found
+ * Bekreft at finner fortsatt har gjenstanden og forleng FOUND med 30 dager.
+ * Maks 2 forlengelser / 90 dager totalt. Tilgjengelig når <= 7 dager gjenstår,
+ * eller etter nylig utløp så lenge 90-dagersgrensen ikke er passert.
+ */
+router.post("/:id/extend-found", requireUser, async (req, res) => {
+  try {
+    const user = req.user;
+    const reportId = req.params.id;
+    await syncLifecycleForUser(user.id);
+
+    const { data: existing, error: rErr } = await supaAdmin
+      .from("reports")
+      .select("*")
+      .eq("id", reportId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (rErr) return res.status(400).json({ error: rErr.message });
+    if (!existing) return res.status(404).json({ error: "Report not found" });
+    if (existing.type !== "FOUND") return res.status(400).json({ error: "ONLY_FOUND_CAN_BE_EXTENDED" });
+    if (existing.closed_at || existing.status === "CLOSED") return res.status(409).json({ error: "REPORT_CLOSED" });
+
+    const extensionCount = Number(existing.extension_count || 0);
+    if (extensionCount >= 2) {
+      return res.status(409).json({ error: "FOUND_EXTENSION_LIMIT", message: "Funnet-rapporten har nådd maks 90 dager." });
+    }
+
+    const createdAt = Date.parse(existing.created_at || "");
+    const currentVisibleUntil = Date.parse(existing.visible_until || "");
+    if (!Number.isFinite(createdAt)) return res.status(400).json({ error: "INVALID_CREATED_AT" });
+
+    const maxVisibleUntil = createdAt + 90 * 24 * 60 * 60 * 1000;
+    if (Date.now() >= maxVisibleUntil) {
+      return res.status(409).json({ error: "FOUND_MAX_AGE_REACHED", message: "Funnet-rapporten kan ikke forlenges utover 90 dager." });
+    }
+
+    const msLeft = Number.isFinite(currentVisibleUntil) ? currentVisibleUntil - Date.now() : 0;
+    if (msLeft > 7 * 24 * 60 * 60 * 1000) {
+      return res.status(409).json({
+        error: "FOUND_EXTENSION_TOO_EARLY",
+        message: "Rapporten kan forlenges når det er syv dager eller mindre igjen.",
+        visible_until: existing.visible_until,
+      });
+    }
+
+    const base = Math.max(Date.now(), Number.isFinite(currentVisibleUntil) ? currentVisibleUntil : Date.now());
+    const nextVisibleUntil = new Date(Math.min(base + 30 * 24 * 60 * 60 * 1000, maxVisibleUntil)).toISOString();
+    const nowIso = new Date().toISOString();
+
+    const { data: updated, error: uErr } = await supaAdmin
+      .from("reports")
+      .update({
+        status: "ACTIVE",
+        visible_until: nextVisibleUntil,
+        archived_at: null,
+        last_extended_at: nowIso,
+        extension_count: extensionCount + 1,
+      })
+      .eq("id", reportId)
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+
+    if (uErr) return res.status(400).json({ error: uErr.message });
+
+    try {
+      await supaAdmin.rpc("refresh_matches_for_report", matchRefreshParams(reportId));
+    } catch (rpcErr) {
+      console.warn("[reports] refresh after FOUND extension failed", rpcErr?.message ?? rpcErr);
+    }
+
+    return res.json({ ok: true, report: updated });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message ?? "Server error" });
+  }
+});
 
 /**
  * POST /reports/:id/close

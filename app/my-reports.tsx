@@ -218,6 +218,22 @@ function canExtendFound(r: Report) {
   return until - Date.now() <= 7 * 24 * 60 * 60 * 1000;
 }
 
+
+function lifecycleErrorCopy(code: string | undefined, t: (key: any) => string) {
+  switch (String(code || "").toUpperCase()) {
+    case "FOUND_EXTENSION_TOO_EARLY":
+      return { title: t("reports.extendTooEarlyTitle"), body: t("reports.extendTooEarlyBody") };
+    case "FOUND_EXTENSION_LIMIT":
+      return { title: t("reports.extendLimitTitle"), body: t("reports.extendLimitBody") };
+    case "FOUND_MAX_AGE_REACHED":
+      return { title: t("reports.maxAgeTitle"), body: t("reports.maxAgeBody") };
+    case "REPORT_CLOSED":
+      return { title: t("reports.closedTitle"), body: t("reports.closedBody") };
+    default:
+      return null;
+  }
+}
+
 function shortMessage(body?: string) {
   if (!body) return "";
   const t = body.replace(/\s+/g, " ").trim();
@@ -244,7 +260,7 @@ function sortReportsByActivity(reports: Report[], activityByReport: Record<strin
 export default function MyReportsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [reports, setReports] = useState<Report[]>([]);
   const [unreadByReport, setUnreadByReport] = useState<Record<string, boolean>>({});
   const [activityByReport, setActivityByReport] = useState<Record<string, LastActivity | null>>({});
@@ -467,9 +483,10 @@ export default function MyReportsScreen() {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
+      const friendly = lifecycleErrorCopy(data?.error, t);
       Alert.alert(
-        language === "en" ? "Could not extend" : "Kunne ikke forlenge",
-        data?.message || data?.error || (language === "en" ? "Please try again later." : "Prøv igjen senere.")
+        friendly?.title || (language === "en" ? "Could not extend" : "Kunne ikke forlenge"),
+        friendly?.body || data?.message || (language === "en" ? "Please try again later." : "Prøv igjen senere.")
       );
       return;
     }
@@ -550,10 +567,8 @@ export default function MyReportsScreen() {
           title={language === "en" ? "My cases" : "Mine saker"}
           subtitle={language === "en" ? "Overview and latest activity" : "Oversikt og siste aktivitet"}
           onBack={() => {
-
- router.replace("/(tabs)");
-
-}}
+            router.replace("/(tabs)");
+          }}
           right={<AuthHeaderAction />}
         />
 

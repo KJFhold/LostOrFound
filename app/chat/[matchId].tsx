@@ -189,58 +189,83 @@ export default function ChatScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <PremiumHeader title={t("chat.title")} subtitle={t("chat.subtitle")} onBack={() => router.back()} right={<AuthHeaderAction />} />
+        <PremiumHeader
+          title={t("chat.title")}
+          subtitle={t("chat.subtitle")}
+          onBack={() => router.back()}
+          right={<AuthHeaderAction />}
+        />
+
         <KeyboardAvoidingView
-          style={styles.chatArea}
+          style={styles.keyboardArea}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={0}
         >
-
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator />
-            <Text style={styles.muted}>{t("chat.loading")}</Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            style={styles.messageList}
-            contentContainerStyle={{ padding: 12, paddingBottom: 16 }}
-            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => {
-              const mine = item.sender_id === user?.id;
-              return (
-                <View style={[styles.msgRow, mine ? { justifyContent: "flex-end" } : { justifyContent: "flex-start" }]}>
-                  <View style={[styles.bubble, mine ? styles.bubbleMe : styles.bubbleOther]}>
-                    <Text style={[styles.body, mine ? styles.bodyMe : styles.bodyOther]}>{item.body}</Text>
-                    <Text style={[styles.time, mine ? styles.timeMe : styles.timeOther]}>{timeShort(item.created_at)}</Text>
-                  </View>
+          {loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator />
+              <Text style={styles.muted}>{t("chat.loading")}</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              style={styles.messageList}
+              data={messages}
+              keyExtractor={(m) => m.id}
+              contentContainerStyle={styles.messageContent}
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => {
+                try { listRef.current?.scrollToEnd({ animated: false }); } catch {}
+              }}
+              ListEmptyComponent={
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyTitle}>{language === "en" ? "No messages yet" : "Ingen meldinger ennå"}</Text>
+                  <Text style={styles.emptyBody}>{language === "en" ? "Write the first message below." : "Skriv den første meldingen nedenfor."}</Text>
                 </View>
-              );
-            }}
-          />
-        )}
-
-        <View style={[styles.inputBar, { paddingBottom: Math.max(10, insets.bottom) }]}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={t("chat.placeholder")}
-              placeholderTextColor={theme.colors.muted}
-              style={styles.input}
-              multiline
+              }
+              renderItem={({ item }) => {
+                const mine = item.sender_id === user?.id;
+                return (
+                  <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowOther]}>
+                    <View style={[styles.bubble, mine ? styles.bubbleMe : styles.bubbleOther]}>
+                      <Text style={[styles.body, mine ? styles.bodyMe : styles.bodyOther]}>{item.body}</Text>
+                      <Text style={[styles.time, mine ? styles.timeMe : styles.timeOther]}>{timeShort(item.created_at)}</Text>
+                    </View>
+                  </View>
+                );
+              }}
             />
+          )}
+
+          <View style={[styles.composerWrap, { paddingBottom: Math.max(10, insets.bottom) }]}>
+            <View style={styles.inputShell}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder={t("chat.placeholder")}
+                placeholderTextColor={theme.colors.muted}
+                style={styles.input}
+                multiline
+                maxLength={1000}
+                editable={!sending}
+                returnKeyType="default"
+              />
+            </View>
             <Pressable
-              onPress={sendMessage}
+              onPress={() => void sendMessage()}
               disabled={sending || !text.trim()}
-              style={({ pressed }) => [styles.sendBtn, (sending || !text.trim()) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                (sending || !text.trim()) && styles.sendBtnDisabled,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t("chat.send")}
             >
               <Text style={styles.sendTxt}>{sending ? "…" : t("chat.send")}</Text>
             </Pressable>
-        </View>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </>
@@ -249,53 +274,46 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  chatArea: { flex: 1 },
+  keyboardArea: { flex: 1 },
   messageList: { flex: 1 },
+  messageContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+  },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   muted: { marginTop: 8, color: theme.colors.muted, fontWeight: "700" },
-
-  msgRow: { flexDirection: "row", marginBottom: 10 },
-  bubble: { maxWidth: "82%", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  bubbleMe: { backgroundColor: theme.colors.primary },
-  bubbleOther: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-
-  body: { fontWeight: "700", lineHeight: 18 },
-  bodyMe: { color: "#fff" },
+  emptyWrap: { flex: 1, minHeight: 220, alignItems: "center", justifyContent: "center", paddingHorizontal: 30 },
+  emptyTitle: { color: theme.colors.text, fontSize: 17, fontWeight: "900" },
+  emptyBody: { marginTop: 6, color: theme.colors.muted, fontSize: 14, fontWeight: "600", textAlign: "center" },
+  msgRow: { flexDirection: "row", marginBottom: 8 },
+  msgRowMine: { justifyContent: "flex-end", paddingLeft: 52 },
+  msgRowOther: { justifyContent: "flex-start", paddingRight: 52 },
+  bubble: { maxWidth: "86%", minWidth: 72, borderRadius: 18, paddingHorizontal: 13, paddingTop: 9, paddingBottom: 7 },
+  bubbleMe: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 5 },
+  bubbleOther: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderBottomLeftRadius: 5 },
+  body: { fontSize: 16, fontWeight: "600", lineHeight: 21 },
+  bodyMe: { color: "#FFFFFF" },
   bodyOther: { color: theme.colors.text },
-
-  time: { marginTop: 6, fontSize: 11, fontWeight: "800" },
-  timeMe: { color: "rgba(255,255,255,0.85)", alignSelf: "flex-end" },
-  timeOther: { color: theme.colors.muted, alignSelf: "flex-end" },
-
-  inputBar: {
+  time: { marginTop: 3, fontSize: 10, fontWeight: "700", alignSelf: "flex-end" },
+  timeMe: { color: "rgba(255,255,255,0.72)" },
+  timeOther: { color: theme.colors.muted },
+  composerWrap: {
     flexDirection: "row",
-    gap: 10,
-    padding: 12,
+    alignItems: "flex-end",
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.bg,
-    alignItems: "flex-end",
   },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-    color: theme.colors.text,
-    fontWeight: "700",
-  },
-  sendBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: theme.colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sendTxt: { color: "#fff", fontWeight: "900" },
+  inputShell: { flex: 1, minHeight: 46, maxHeight: 126, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, justifyContent: "center" },
+  input: { minHeight: 44, maxHeight: 120, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, color: theme.colors.text, fontSize: 16, fontWeight: "600" },
+  sendBtn: { minWidth: 70, height: 46, paddingHorizontal: 15, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primary },
+  sendBtnDisabled: { opacity: 0.42 },
+  sendTxt: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
+  pressed: { opacity: 0.82 },
 });

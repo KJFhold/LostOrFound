@@ -43,7 +43,7 @@ const initialDraft: ReportDraft = {
   brand: "",
   rewardNOK: "0",
   occurredAtISO: undefined,
-  location: { latitude: 59.9139, longitude: 10.7522, radiusMeters: 500 },
+  location: { latitude: 59.9139, longitude: 10.7522, radiusMeters: 500, confirmed: false },
 };
 
 type Ctx = {

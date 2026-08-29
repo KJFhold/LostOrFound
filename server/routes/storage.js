@@ -28,7 +28,8 @@ router.post("/signed-upload", requireUser, async (req, res) => {
     if (qErr) return res.status(400).json({ error: qErr.message });
     if (!exists) return res.status(404).json({ error: "Report not found" });
 
-    const safeExt = String(ext).replace(".", "");
+    const safeExt = String(ext).replace(".", "").toLowerCase();
+    if (!["jpg", "jpeg", "png", "webp"].includes(safeExt)) return res.status(400).json({ error: "Unsupported image type" });
     const fileName = `${randomUUID()}.${safeExt}`;
     const objectPath = `reports/${reportId}/${fileName}`;
     const dbPath = `${BUCKET}/${objectPath}`;

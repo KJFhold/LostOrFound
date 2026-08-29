@@ -456,7 +456,8 @@ export default function CreateReportScreen() {
   const latitude = (draft as any).location?.latitude ?? 59.9139;  
   const longitude = (draft as any).location?.longitude ?? 10.7522;  
   const radiusMeters = (draft as any).location?.radiusMeters;  
-  const effectiveRadiusMeters = type === "FOUND" ? 10 : radiusMeters;  
+  const effectiveRadiusMeters = type === "FOUND" ? 10 : radiusMeters;
+  const locationConfirmed = (draft as any).location?.confirmed === true;  
   const previewRegion = useMemo(  
     () => ({  
       latitude,  
@@ -631,6 +632,7 @@ const subcategoryLabel = useMemo(() => {
           latitude: Number(report.lat ?? 59.9139),
           longitude: Number(report.lng ?? 10.7522),
           radiusMeters: Number(report.radius_m ?? report.search_radius_m ?? report.area_radius_m ?? report.location_radius_m ?? 500),
+          confirmed: true,
         });
         const label = report.location_label ?? "";
         setLocationLabel(label);
@@ -731,7 +733,6 @@ const subcategoryLabel = useMemo(() => {
     if (!color) { missing.push(validationKey.color); firstY = firstY || detailsSectionY; }
     const iso = toISO(dateStr.trim(), timeStr.trim());
     if (!iso) { missing.push(validationKey.time); firstY = firstY || timeSectionY; }
-    const locationConfirmed = (draft as any).location?.confirmed === true;
     if (!locationConfirmed || !locationLabel.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       missing.push(validationKey.location); firstY = firstY || timeSectionY;
     }
@@ -972,16 +973,23 @@ const subcategoryLabel = useMemo(() => {
                 String((r as PromiseRejectedResult).reason),  
             }));  
           log("uploads done", { ok, failed, failedDetails });  
-          if (failed > 0) {  
-            const first = failedDetails[0]?.reason ?? (language === "en" ? "Unknown error" : "Ukjent feil");  
-            Alert.alert(  
-              language === "en" ? "Images" : "Bilder",  
-              `${language === "en" ? "Uploaded" : "Lastet opp"} ${ok} ${language === "en" ? "image(s)" : "bilde(r)"}. ${failed} ${language === "en" ? "failed" : "feilet"}.\n${first}`  
-            );  
+          if (failed > 0) {
+            console.warn("[create-report] image upload failed", failedDetails);
+            Alert.alert(
+              language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
+              language === "en"
+                ? "The report was saved, but one or more images could not be uploaded. Open the report from My cases and try adding the image again."
+                : "Rapporten ble lagret, men ett eller flere bilder kunne ikke lastes opp. Åpne rapporten fra Mine saker og prøv å legge til bildet på nytt."
+            );
           }  
         } catch (e: any) {  
           log("uploads error", e?.message ?? e);  
-          Alert.alert(language === "en" ? "Images" : "Bilder", e?.message ?? "Feil under opplasting av bilder.");  
+          Alert.alert(
+            language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
+            language === "en"
+              ? "The report was saved, but the image could not be uploaded. Open the report from My cases and try again."
+              : "Rapporten ble lagret, men bildet kunne ikke lastes opp. Åpne rapporten fra Mine saker og prøv igjen."
+          );  
         } finally {  
           setUploading(false);  
           setPendingImages([]);  
@@ -1045,6 +1053,7 @@ const subcategoryLabel = useMemo(() => {
     rewardNOK,  
     latitude,  
     longitude,  
+    locationConfirmed,
     locationLabel,  
     occurredAtISO,  
     pendingImages,  
@@ -1341,7 +1350,7 @@ const subcategoryLabel = useMemo(() => {
               </View>  
               <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Position" : "Posisjon"}</Text>  
               <Text style={styles.muted}>{language === "en" ? "Choose the place on the map or enter an address / place description." : "Velg sted på kart eller skriv inn adresse / stedsbeskrivelse."}</Text>    
-              <Text style={[(draft as any).location?.confirmed === true ? styles.confirmedText : styles.unconfirmedText]}>{(draft as any).location?.confirmed === true ? (language === "en" ? "✓ Location confirmed" : "✓ Sted bekreftet") : (language === "en" ? "Location must be confirmed on the map" : "Stedet må bekreftes på kartet")}</Text>
+              <Text style={[locationConfirmed ? styles.confirmedText : styles.unconfirmedText]}>{locationConfirmed ? (language === "en" ? "✓ Location confirmed" : "✓ Sted bekreftet") : (language === "en" ? "Location must be confirmed on the map" : "Stedet må bekreftes på kartet")}</Text>
               <Pressable style={[styles.mapPreviewWrap, validationMissing.includes(validationKey.location) && styles.inputError]} onPress={openMap}>  
                 <View pointerEvents="none" style={styles.mapPreviewInner}>  
                   <MapView  

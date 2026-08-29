@@ -304,6 +304,9 @@ const toISO = (dateStr: string, timeStr: string): string | undefined => {
   if (Number.isNaN(dt.getTime())) return undefined;  
   return dt.toISOString();  
 };  
+function createClientRequestId() {
+  return `report-${Date.now()}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
+}
 class ReportApiError extends Error {
   status: number;
   code?: string;
@@ -398,6 +401,10 @@ export default function CreateReportScreen() {
   const editLoadedRef = useRef<string | null>(null);  
   const [categoryAnchorY, setCategoryAnchorY] = useState(0);  
   const [saving, setSaving] = useState(false);
+  const networkSubmitRef = useRef(false);
+  const requestIdRef = useRef<string | null>(null);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+  const [limitOverrideAllowed, setLimitOverrideAllowed] = useState(false);
   const [validationMissing, setValidationMissing] = useState<string[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
   const [objectSectionY, setObjectSectionY] = useState(0);
@@ -818,7 +825,9 @@ const subcategoryLabel = useMemo(() => {
       }  
       throw e;  
     }  
-    try {  
+    try {
+      if (networkSubmitRef.current) return;
+      networkSubmitRef.current = true;
       setSaving(true);  
       const secondary = colorSecondary && colorSecondary !== color ? colorSecondary : "";  
       const secondaryLabel = secondary ? (COLORS.find((c) => c.value === secondary)?.label || secondary) : "";  
@@ -834,7 +843,8 @@ const subcategoryLabel = useMemo(() => {
         }  
         return new Date().toISOString();  
       })();  
-      const body: any = {  
+      if (!isEditMode && !requestIdRef.current) requestIdRef.current = createClientRequestId();
+      const body: any = {
         type,  
         category: category.trim().toUpperCase(),  
         subcategory_key: subcategoryKey ? String(subcategoryKey).trim().toUpperCase() : undefined,  
@@ -852,6 +862,7 @@ const subcategoryLabel = useMemo(() => {
         radius_m: effectiveRadiusMeters ?? undefined,  
         location_label: locationLabel?.trim() || undefined,  
         ...(type === "LOST" && rewardEnabled ? { reward_ore: Math.max(0, Math.round(Number(rewardNOK) * 100)) } : {}),
+        ...(!isEditMode ? { client_request_id: requestIdRef.current } : {}),
         ...(options?.testOverrideWeeklyLimit ? { test_override_weekly_limit: true } : {}),
       };
       let accessToken: string | undefined;  
@@ -995,7 +1006,8 @@ const subcategoryLabel = useMemo(() => {
           setPendingImages([]);  
         }  
       }  
-      reset();  
+      reset();
+      requestIdRef.current = null;
       if (reportId) {  
   setSavedType(type);  
   setSavedReportId(String(reportId));  
@@ -1012,23 +1024,8 @@ const subcategoryLabel = useMemo(() => {
       const testOverrideAllowed = e?.testOverrideAllowed === true;
 
       if (code === "LOST_REPORT_WEEKLY_LIMIT" && testOverrideAllowed && !options?.testOverrideWeeklyLimit) {
-        Alert.alert(
-          language === "en" ? "Report limit reached" : "Grensen er nådd",
-          language === "en"
-            ? "You can normally create up to two lost reports within seven days. As an approved test user, you can create this report anyway."
-            : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av syv dager. Som godkjent testbruker kan du opprette rapporten likevel.",
-          [
-            { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-            {
-              text: language === "en" ? "Open My cases" : "Gå til Mine saker",
-              onPress: () => router.replace("/my-reports"),
-            },
-            {
-              text: language === "en" ? "Create anyway" : "Opprett likevel",
-              onPress: () => { void submitRef.current({ testOverrideWeeklyLimit: true }); },
-            },
-          ]
-        );
+        setLimitOverrideAllowed(true);
+        setLimitDialogOpen(true);
         return;
       }
 
@@ -1037,8 +1034,9 @@ const subcategoryLabel = useMemo(() => {
       const msg = e instanceof ReportApiError ? (e.serverMessage || fallback) : (e?.message || fallback);
       console.log("[create-report] submit error:", msg);
       Alert.alert(language === "en" ? "Could not save" : "Kunne ikke lagre", msg);
-    } finally {  
-      setSaving(false);  
+    } finally {
+      setSaving(false);
+      networkSubmitRef.current = false;
     }  
   }, [  
     type,  
@@ -1462,7 +1460,7 @@ const subcategoryLabel = useMemo(() => {
               )}  
             </View>  
             {/* CTA */}  
-            <Pressable style={[styles.ctaBtn, saving && { opacity: 0.7 }]} onPress={() => void onSubmit()} disabled={saving || editLoading}>  
+            <Pressable style={[styles.ctaBtn, saving && { opacity: 0.7 }]} onPress={() => void onSubmit()} disabled={saving || uploading || editLoading}>  
               <Text style={styles.ctaTxt}>  
                 {saving
                   ? (language === "en" ? "Saving…" : "Lagrer…")
@@ -1499,6 +1497,17 @@ const subcategoryLabel = useMemo(() => {
        <Pressable style={[modalStyles.btn, modalStyles.btnOutline]} onPress={() => { setPhotoPromptOpen(false); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true })); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Add photo" : "Legg til bilde"}</Text></Pressable>
        <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current(); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Continue" : "Fortsett"}</Text></Pressable>
      </View>
+   </View></View>
+ </Modal>
+ <Modal visible={limitDialogOpen} transparent animationType="fade" onRequestClose={() => setLimitDialogOpen(false)}>
+   <View style={modalStyles.backdrop}><View style={modalStyles.card}>
+     <View style={[modalStyles.icon, { backgroundColor: "#FEF3C7" }]}><Text style={[modalStyles.iconTxt, { color: "#B45309" }]}>!</Text></View>
+     <Text style={modalStyles.title}>{language === "en" ? "Report limit reached" : "Grensen er nådd"}</Text>
+     <Text style={modalStyles.body}>{language === "en" ? "You can normally create up to two lost reports within seven days. This account is approved for testing and may create the report anyway." : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av sju dager. Denne kontoen er godkjent for testing og kan opprette rapporten likevel."}</Text>
+     <Text style={styles.testOnlyNote}>{language === "en" ? "Available to approved test users only" : "Kun tilgjengelig for godkjente testbrukere"}</Text>
+     {limitOverrideAllowed && <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => { setLimitDialogOpen(false); setTimeout(() => void submitRef.current({ testOverrideWeeklyLimit: true }), 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>}
+     <Pressable style={[modalStyles.btn, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => { setLimitDialogOpen(false); router.replace("/my-reports"); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
+     <Pressable style={{ marginTop: 14, alignItems: "center", paddingVertical: 8 }} onPress={() => setLimitDialogOpen(false)}><Text style={styles.cancelLink}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
    </View></View>
  </Modal>
  {/* Lagret-modal (proff) */}  
@@ -1616,6 +1625,8 @@ const styles = StyleSheet.create({
   unconfirmedText: { marginTop: 9, color: "#B45309", fontWeight: "800", fontSize: 12 },
   missingList: { marginTop: 14, backgroundColor: "#FFF7ED", borderRadius: 12, padding: 12 },
   missingItem: { color: "#9A3412", fontWeight: "800", marginVertical: 2 },
+  testOnlyNote: { marginTop: 12, textAlign: "center", color: "#B45309", fontWeight: "800", fontSize: 12 },
+  cancelLink: { color: theme.colors.muted, fontWeight: "800" },
   cardOnTop: {  
     zIndex: 5000,  
     ...Platform.select({ android: { elevation: 30 } }),  

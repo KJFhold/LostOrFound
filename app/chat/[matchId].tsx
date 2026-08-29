@@ -16,6 +16,7 @@ import {
   Alert,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../src/lib/supabase";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { theme } from "../../src/ui/theme";
@@ -40,6 +41,7 @@ function timeShort(iso: string) {
 
 export default function ChatScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { language, t } = useI18n();
 
@@ -186,8 +188,13 @@ export default function ChatScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <PremiumHeader title={t("chat.title")} subtitle={t("chat.subtitle")} onBack={() => router.back()} right={<AuthHeaderAction />} />
+        <KeyboardAvoidingView
+          style={styles.chatArea}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={0}
+        >
 
         {loading ? (
           <View style={styles.center}>
@@ -199,7 +206,10 @@ export default function ChatScreen() {
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
-            contentContainerStyle={{ padding: 12, paddingBottom: 12 }}
+            style={styles.messageList}
+            contentContainerStyle={{ padding: 12, paddingBottom: 16 }}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const mine = item.sender_id === user?.id;
               return (
@@ -214,8 +224,7 @@ export default function ChatScreen() {
           />
         )}
 
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: Math.max(10, insets.bottom) }]}>
             <TextInput
               value={text}
               onChangeText={setText}
@@ -231,15 +240,17 @@ export default function ChatScreen() {
             >
               <Text style={styles.sendTxt}>{sending ? "…" : t("chat.send")}</Text>
             </Pressable>
-          </View>
+        </View>
         </KeyboardAvoidingView>
-      </View>
+      </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
+  chatArea: { flex: 1 },
+  messageList: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   muted: { marginTop: 8, color: theme.colors.muted, fontWeight: "700" },
 

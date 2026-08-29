@@ -9,6 +9,7 @@ import {
   Pressable,
   View,
   Alert,
+  Modal,
 } from "react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../src/lib/supabase";
@@ -266,6 +267,10 @@ export default function MyReportsScreen() {
   const [activityByReport, setActivityByReport] = useState<Record<string, LastActivity | null>>({});
   const [matchCountByReport, setMatchCountByReport] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    kind: "extend" | "close" | "delete";
+    report: Report;
+  } | null>(null);
   const matchToReportRef = useRef<Record<string, string>>({});
   const lastSeenMapRef = useRef<Record<string, string>>({});
 
@@ -494,16 +499,7 @@ export default function MyReportsScreen() {
   };
 
   const confirmExtendFound = (r: Report) => {
-    Alert.alert(
-      language === "en" ? "Still have the item?" : "Har du fortsatt gjenstanden?",
-      language === "en"
-        ? "This keeps the found report active for up to 30 more days. A found report can be active for a maximum of 90 days."
-        : "Dette holder funnet-rapporten aktiv i opptil 30 nye dager. En funnet-rapport kan være aktiv i maksimalt 90 dager.",
-      [
-        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-        { text: language === "en" ? "Extend" : "Forleng", onPress: () => extendFoundReport(r) },
-      ]
-    );
+    setConfirmDialog({ kind: "extend", report: r });
   };
 
   const closeReport = async (r: Report) => {
@@ -534,29 +530,38 @@ export default function MyReportsScreen() {
   };
 
   const confirmClose = (r: Report) => {
-    Alert.alert(
-      language === "en" ? "Close case?" : "Avslutt sak?",
-      language === "en"
-        ? "The case remains in your overview, but it will not be used for new matches."
-        : "Saken beholdes i oversikten, men brukes ikke lenger for nye treff.",
-      [
-        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-        { text: language === "en" ? "Close case" : "Avslutt sak", onPress: () => closeReport(r) },
-      ]
-    );
+    setConfirmDialog({ kind: "close", report: r });
   };
 
   const confirmDelete = (r: Report) => {
-    Alert.alert(
-      language === "en" ? "Delete case?" : "Slett sak?",
-      language === "en"
-        ? "This permanently deletes the case, including photos and matches."
-        : "Dette sletter saken permanent, inkludert bilder og treff.",
-      [
-        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-        { text: language === "en" ? "Delete" : "Slett", style: "destructive", onPress: () => deleteReport(r.id) },
-      ]
-    );
+    setConfirmDialog({ kind: "delete", report: r });
+  };
+
+  const dialogTitle = confirmDialog?.kind === "extend"
+    ? (language === "en" ? "Still have the item?" : "Har du fortsatt gjenstanden?")
+    : confirmDialog?.kind === "close"
+    ? (language === "en" ? "Close case?" : "Avslutt sak?")
+    : (language === "en" ? "Delete case?" : "Slett sak?");
+
+  const dialogBody = confirmDialog?.kind === "extend"
+    ? (language === "en"
+        ? "Keep this found report active for up to 30 more days. Found reports can remain active for a maximum of 90 days."
+        : "Hold funnet-rapporten aktiv i opptil 30 nye dager. Funnet-rapporter kan være aktive i maksimalt 90 dager.")
+    : confirmDialog?.kind === "close"
+    ? (language === "en"
+        ? "The case stays in My cases, but it will no longer be used for new matches."
+        : "Saken beholdes i Mine saker, men brukes ikke lenger for nye treff.")
+    : (language === "en"
+        ? "This permanently deletes the case, including photos and matches. This cannot be undone."
+        : "Dette sletter saken permanent, inkludert bilder og treff. Handlingen kan ikke angres.");
+
+  const confirmDialogAction = async () => {
+    const dialog = confirmDialog;
+    if (!dialog) return;
+    setConfirmDialog(null);
+    if (dialog.kind === "extend") await extendFoundReport(dialog.report);
+    else if (dialog.kind === "close") await closeReport(dialog.report);
+    else await deleteReport(dialog.report.id);
   };
 
   return (
@@ -659,6 +664,27 @@ export default function MyReportsScreen() {
           </ScrollView>
         )}
       </View>
+      <Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}>
+        <View style={dialogStyles.backdrop}>
+          <View style={dialogStyles.card}>
+            <View style={dialogStyles.iconCircle}>
+              <Text style={dialogStyles.iconText}>{confirmDialog?.kind === "delete" ? "!" : confirmDialog?.kind === "close" ? "✓" : "+"}</Text>
+            </View>
+            <Text style={dialogStyles.title}>{dialogTitle}</Text>
+            <Text style={dialogStyles.body}>{dialogBody}</Text>
+            <View style={dialogStyles.actions}>
+              <Pressable style={dialogStyles.cancelBtn} onPress={() => setConfirmDialog(null)}>
+                <Text style={dialogStyles.cancelText}>{language === "en" ? "Cancel" : "Avbryt"}</Text>
+              </Pressable>
+              <Pressable style={[dialogStyles.confirmBtn, confirmDialog?.kind === "delete" && dialogStyles.deleteConfirmBtn]} onPress={() => void confirmDialogAction()}>
+                <Text style={dialogStyles.confirmText}>
+                  {confirmDialog?.kind === "extend" ? (language === "en" ? "Extend" : "Forleng") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case" : "Avslutt sak") : (language === "en" ? "Delete" : "Slett")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -771,4 +797,19 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
   },
   reloadTxt: { fontWeight: "800", color: theme.colors.text },
+});
+
+const dialogStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.48)", alignItems: "center", justifyContent: "center", padding: 24 },
+  card: { width: "100%", maxWidth: 410, borderRadius: 22, backgroundColor: "#FFFFFF", padding: 22, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 12 },
+  iconCircle: { width: 52, height: 52, borderRadius: 26, alignSelf: "center", alignItems: "center", justifyContent: "center", backgroundColor: "#EEF2FF" },
+  iconText: { color: theme.colors.primary, fontSize: 25, fontWeight: "900" },
+  title: { marginTop: 14, textAlign: "center", color: theme.colors.text, fontSize: 19, fontWeight: "900" },
+  body: { marginTop: 9, textAlign: "center", color: theme.colors.muted, fontSize: 14, lineHeight: 21, fontWeight: "600" },
+  actions: { flexDirection: "row", gap: 10, marginTop: 20 },
+  cancelBtn: { flex: 1, minHeight: 46, borderRadius: 13, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.colors.border, backgroundColor: "#FFFFFF" },
+  cancelText: { color: theme.colors.text, fontWeight: "900" },
+  confirmBtn: { flex: 1, minHeight: 46, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primary },
+  deleteConfirmBtn: { backgroundColor: "#B42318" },
+  confirmText: { color: "#FFFFFF", fontWeight: "900" },
 });

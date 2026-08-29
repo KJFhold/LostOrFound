@@ -789,7 +789,49 @@ const subcategoryLabel = useMemo(() => {
       Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open camera." : "Kunne ikke åpne kamera."));  
     }  
   };  
-  const removePending = (uri: string) => setPendingImages((prev) => prev.filter((u) => u !== uri));  
+  const removePending = (uri: string) => setPendingImages((prev) => prev.filter((u) => u !== uri));
+
+  const retryImagesOnly = useCallback(async () => {
+    if (!retryReportId || retryImageUris.length === 0 || uploading) return;
+
+    try {
+      setUploading(true);
+      const results = await Promise.allSettled(
+        retryImageUris.map((uri) => uploadReportImage(retryReportId, uri))
+      );
+      const failedUris = results
+        .map((result, index) => ({ result, uri: retryImageUris[index] }))
+        .filter(({ result }) => result.status === "rejected")
+        .map(({ uri }) => uri);
+
+      if (failedUris.length > 0) {
+        setRetryImageUris(failedUris);
+        Alert.alert(
+          language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
+          language === "en"
+            ? `${failedUris.length} image(s) still could not be uploaded. Check your connection and try again.`
+            : `${failedUris.length} bilde(r) kunne fortsatt ikke lastes opp. Kontroller nettverket og prøv igjen.`
+        );
+        return;
+      }
+
+      setImageRetryOpen(false);
+      setRetryReportId(null);
+      setRetryImageUris([]);
+      setPendingImages([]);
+      setSavedReportId(retryReportId);
+      setSavedCount(0);
+      setSavedOpen(true);
+    } catch (error: any) {
+      Alert.alert(
+        language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
+        error?.message ?? (language === "en" ? "Please try again." : "Prøv igjen.")
+      );
+    } finally {
+      setUploading(false);
+    }
+  }, [language, retryImageUris, retryReportId, uploading]);
+
   const submitRef = useRef<(options?: { testOverrideWeeklyLimit?: boolean }) => Promise<void>>(async () => {});
   const appendToDescription = (line: string) => {  
     const current = String((draft as any).description ?? "").trim();  
@@ -919,7 +961,8 @@ const subcategoryLabel = useMemo(() => {
       }  
       log("POST /reports ok", data);  
       const reportId: string | null = data?.report?.id ?? data?.id ?? null;  
-      let count = data?.candidates?.length ?? 0;  
+      let count = data?.candidates?.length ?? 0;
+      let imageUploadHadFailure = false;
     // Match count updates on My cases; do not delay report completion here.  
       if (reportId && pendingImages.length > 0) {  
         try {  
@@ -972,38 +1015,30 @@ const subcategoryLabel = useMemo(() => {
             }));  
           log("uploads done", { ok, failed, failedDetails });  
           if (failed > 0) {
+            imageUploadHadFailure = true;
             console.warn("[create-report] image upload failed", failedDetails);
-            Alert.alert(
-              language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
-              language === "en"
-                ? "The report was saved, but one or more images could not be uploaded. Open the report from My cases and try adding the image again."
-                : "Rapporten ble lagret, men ett eller flere bilder kunne ikke lastes opp. Åpne rapporten fra Mine saker og prøv å legge til bildet på nytt."
-            );
+            setRetryReportId(String(reportId));
+            setRetryImageUris(failedDetails.map((item) => item.uri).filter(Boolean));
+            setImageRetryOpen(true);
           }  
-        } catch (e: any) {  
-          log("uploads error", e?.message ?? e);  
-          Alert.alert(
-            language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
-            language === "en"
-              ? "The report was saved, but the image could not be uploaded. Open the report from My cases and try again."
-              : "Rapporten ble lagret, men bildet kunne ikke lastes opp. Åpne rapporten fra Mine saker og prøv igjen."
-          );  
+        } catch (e: any) {
+          imageUploadHadFailure = true;
+          log("uploads error", e?.message ?? e);
+          setRetryReportId(String(reportId));
+          setRetryImageUris([...pendingImages]);
+          setImageRetryOpen(true);
         } finally {  
           setUploading(false);  
         }  
       }  
-      if (!imageRetryOpen) { reset(); requestIdRef.current = null; }
-      if (reportId) {  
-  setSavedType(type);  
-  setSavedReportId(String(reportId));  
-  setSavedCount(Number(count) || 0);  
-  setSavedOpen(true);  
-} else {  
-  setSavedType(type);  
-  setSavedReportId(null);  
-  setSavedCount(0);  
-  setSavedOpen(true);  
-}  
+      reset();
+      requestIdRef.current = null;
+      if (!imageUploadHadFailure) {
+        setSavedType(type);
+        setSavedReportId(reportId ? String(reportId) : null);
+        setSavedCount(Number(count) || 0);
+        setSavedOpen(true);
+      }  
     } catch (e: any) {
       const code = String(e?.code || "").toUpperCase();
       const testOverrideAllowed = e?.testOverrideAllowed === true;
@@ -1047,34 +1082,6 @@ const subcategoryLabel = useMemo(() => {
     rewardEnabled,  
     activeCurrency,  
   ]);  
-  const retryImagesOnly = async () => {
-    if (!retryReportId || retryImageUris.length === 0 || uploading) return;
-    try {
-      setUploading(true);
-      const results = await Promise.allSettled(
-        retryImageUris.map((uri, index) => uploadReportImage(retryReportId, uri, index))
-      );
-      const failedUris = results
-        .map((result, index) => ({ result, uri: retryImageUris[index] }))
-        .filter(({ result }) => result.status === "rejected")
-        .map(({ uri }) => uri);
-      if (failedUris.length > 0) {
-        setRetryImageUris(failedUris);
-        return;
-      }
-      setImageRetryOpen(false);
-      setRetryReportId(null);
-      setRetryImageUris([]);
-      setPendingImages([]);
-      requestIdRef.current = null;
-      await reset();
-    } catch (error) {
-      console.warn("[create-report] image retry failed", error);
-    } finally {
-      setUploading(false);
-    }
-  };
-
   submitRef.current = onSubmit;
 
   return (  
@@ -1526,8 +1533,8 @@ const subcategoryLabel = useMemo(() => {
      <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
      <Text style={modalStyles.title}>{language === "en" ? "Report limit reached" : "Grensen er nådd"}</Text>
      <Text style={modalStyles.body}>{language === "en" ? "You can normally create up to two lost reports within seven days. Test mode is enabled for this account." : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av sju dager. Testmodus er aktivert for denne kontoen."}</Text>
-     <Pressable style={[modalStyles.btn,modalStyles.btnPrimary,{marginTop:16}]} onPress={() => {setLimitDialogOpen(false);setTimeout(()=>void submitRef.current({testOverrideWeeklyLimit:true}),0)}}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>
-     <Pressable style={[modalStyles.btn,modalStyles.btnOutline,{marginTop:10}]} onPress={() => {setLimitDialogOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => {setLimitDialogOpen(false);setTimeout(()=>void submitRef.current({testOverrideWeeklyLimit:true}),0)}}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setLimitDialogOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
      <Pressable style={styles.dialogTextBtn} onPress={() => setLimitDialogOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
    </View></View>
  </Modal>
@@ -1536,8 +1543,8 @@ const subcategoryLabel = useMemo(() => {
      <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
      <Text style={modalStyles.title}>{language === "en" ? "The report was saved" : "Rapporten er lagret"}</Text>
      <Text style={modalStyles.body}>{language === "en" ? "The image could not be uploaded. Try again now, or add it later from My cases." : "Bildet kunne ikke lastes opp. Prøv igjen nå, eller legg det til senere fra Mine saker."}</Text>
-     <Pressable style={[modalStyles.btn,modalStyles.btnPrimary,{marginTop:16}]} disabled={uploading} onPress={() => void retryImagesOnly()}><Text style={modalStyles.btnPrimaryTxt}>{uploading ? (language === "en" ? "Uploading image…" : "Laster opp bilde…") : (language === "en" ? "Try image again" : "Prøv bildet på nytt")}</Text></Pressable>
-     <Pressable style={[modalStyles.btn,modalStyles.btnOutline,{marginTop:10}]} onPress={() => {setImageRetryOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} disabled={uploading} onPress={() => void retryImagesOnly()}><Text style={modalStyles.btnPrimaryTxt}>{uploading ? (language === "en" ? "Uploading image…" : "Laster opp bilde…") : (language === "en" ? "Try image again" : "Prøv bildet på nytt")}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setImageRetryOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
      <Pressable style={styles.dialogTextBtn} onPress={() => setImageRetryOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Close" : "Lukk"}</Text></Pressable>
    </View></View>
  </Modal>
@@ -1908,12 +1915,18 @@ const modalStyles = StyleSheet.create({
     gap: 10,  
     marginTop: 16,  
   },  
-  btn: {  
-    flex: 1,  
-    paddingVertical: 12,  
-    borderRadius: theme.radius.md,  
-    alignItems: "center",  
-    justifyContent: "center",  
+  btn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: theme.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnStacked: {
+    flex: 0,
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: 16,
   },  
   btnPrimary: {  
     backgroundColor: theme.colors.primary,  

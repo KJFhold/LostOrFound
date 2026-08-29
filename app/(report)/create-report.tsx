@@ -754,6 +754,7 @@ const subcategoryLabel = useMemo(() => {
     }  
   };  
   const removePending = (uri: string) => setPendingImages((prev) => prev.filter((u) => u !== uri));  
+  const submitRef = useRef<(options?: { testOverrideWeeklyLimit?: boolean }) => Promise<void>>(async () => {});
   const appendToDescription = (line: string) => {  
     const current = String((draft as any).description ?? "").trim();  
     const clean = String(line || "").trim();  
@@ -761,7 +762,7 @@ const subcategoryLabel = useMemo(() => {
     const next = current ? `${current}\n${clean}` : clean;  
     setField("description" as any, next);  
   };  
-  const onSubmit = useCallback(async () => {  
+  const onSubmit = useCallback(async (options?: { testOverrideWeeklyLimit?: boolean }) => {  
     console.log("[create-report] CTA pressed");  
     const log = (...args: any[]) => console.log("[create-report]", ...args);  
     if (!validate()) return;  
@@ -825,8 +826,9 @@ const subcategoryLabel = useMemo(() => {
         // ✅ VIKTIG: send radius til backend, ellers blir matching pin-basert  
         radius_m: effectiveRadiusMeters ?? undefined,  
         location_label: locationLabel?.trim() || undefined,  
-        ...(type === "LOST" && rewardEnabled ? { reward_ore: Math.max(0, Math.round(Number(rewardNOK) * 100)) } : {}),  
-      };  
+        ...(type === "LOST" && rewardEnabled ? { reward_ore: Math.max(0, Math.round(Number(rewardNOK) * 100)) } : {}),
+        ...(options?.testOverrideWeeklyLimit ? { test_override_weekly_limit: true } : {}),
+      };
       let accessToken: string | undefined;  
     const headers: Record<string, string> = { "Content-Type": "application/json" };  
       try {  
@@ -866,7 +868,9 @@ const subcategoryLabel = useMemo(() => {
         const errorCode = String(data?.error || "");
         const serverMessage = String(data?.message || data?.error || raw || "");
         log("POST /reports !ok", { status: r.status, errorCode, serverMessage, raw });
-        throw new ReportApiError(r.status, errorCode, serverMessage);
+        const apiError = new ReportApiError(r.status, errorCode, serverMessage) as ReportApiError & { testOverrideAllowed?: boolean };
+        apiError.testOverrideAllowed = data?.test_override_allowed === true;
+        throw apiError;
       }  
       log("POST /reports ok", data);  
       const reportId: string | null = data?.report?.id ?? data?.id ?? null;  
@@ -972,6 +976,30 @@ const subcategoryLabel = useMemo(() => {
   setSavedOpen(true);  
 }  
     } catch (e: any) {
+      const code = String(e?.code || "").toUpperCase();
+      const testOverrideAllowed = e?.testOverrideAllowed === true;
+
+      if (code === "LOST_REPORT_WEEKLY_LIMIT" && testOverrideAllowed && !options?.testOverrideWeeklyLimit) {
+        Alert.alert(
+          language === "en" ? "Report limit reached" : "Grensen er nådd",
+          language === "en"
+            ? "You can normally create up to two lost reports within seven days. As an approved test user, you can create this report anyway."
+            : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av syv dager. Som godkjent testbruker kan du opprette rapporten likevel.",
+          [
+            { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
+            {
+              text: language === "en" ? "Open My cases" : "Gå til Mine saker",
+              onPress: () => router.replace("/my-reports"),
+            },
+            {
+              text: language === "en" ? "Create anyway" : "Opprett likevel",
+              onPress: () => { void submitRef.current({ testOverrideWeeklyLimit: true }); },
+            },
+          ]
+        );
+        return;
+      }
+
       if (showReportApiError(e, language, router)) return;
       const fallback = language === "en" ? "Could not save the case. Please try again." : "Kunne ikke lagre saken. Prøv igjen.";
       const msg = e instanceof ReportApiError ? (e.serverMessage || fallback) : (e?.message || fallback);
@@ -1004,6 +1032,8 @@ const subcategoryLabel = useMemo(() => {
     rewardEnabled,  
     activeCurrency,  
   ]);  
+  submitRef.current = onSubmit;
+
   return (  
     <>  
       <Stack.Screen options={{ headerShown: false }} />  
@@ -1397,7 +1427,7 @@ const subcategoryLabel = useMemo(() => {
               )}  
             </View>  
             {/* CTA */}  
-            <Pressable style={[styles.ctaBtn, saving && { opacity: 0.7 }]} onPress={onSubmit} disabled={saving || editLoading}>  
+            <Pressable style={[styles.ctaBtn, saving && { opacity: 0.7 }]} onPress={() => void onSubmit()} disabled={saving || editLoading}>  
               <Text style={styles.ctaTxt}>  
                 {saving
                   ? (language === "en" ? "Saving…" : "Lagrer…")

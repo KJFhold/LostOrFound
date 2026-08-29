@@ -65,6 +65,18 @@ function visibleUntilForType(type) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function configuredTestUserIds() {
+  return new Set(
+    String(process.env.LOST_REPORT_TEST_USER_IDS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+}
+function isLostReportTestUser(userId) {
+  return !!userId && configuredTestUserIds().has(String(userId));
+}
+
 function isAnonymousUser(user) {
   if (!user) return false;
   return (
@@ -286,6 +298,7 @@ router.post("/", requireUser, async (req, res) => {
       search_radius_m = null,
       area_radius_m = null,
       location_radius_m = null,
+      test_override_weekly_limit = false,
     } = req.body || {};
 
     if (!type || !category || !title || !occurred_at) {
@@ -308,12 +321,24 @@ router.post("/", requireUser, async (req, res) => {
 
     if (normalizedType === "LOST") {
       const recentLostCount = await countRecentLostCreations(user.id);
-      if (recentLostCount >= 2) {
+      const testUser = isLostReportTestUser(user.id);
+      const overrideRequested = test_override_weekly_limit === true;
+
+      if (recentLostCount >= 2 && !(testUser && overrideRequested)) {
         return res.status(429).json({
           error: "LOST_REPORT_WEEKLY_LIMIT",
           message: "Du kan opprette maksimalt to mistet-rapporter i løpet av syv dager.",
           limit: 2,
           window_days: 7,
+          current_count: recentLostCount,
+          test_override_allowed: testUser,
+        });
+      }
+
+      if (overrideRequested && !testUser) {
+        return res.status(403).json({
+          error: "TEST_OVERRIDE_NOT_ALLOWED",
+          message: "Denne kontoen har ikke tilgang til testoverstyring.",
         });
       }
     }

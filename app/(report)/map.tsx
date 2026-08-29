@@ -144,6 +144,7 @@ export default function MapPickerScreen() {
       latitude: pin.latitude,
       longitude: pin.longitude,
       radiusMeters: radius,
+      confirmed: true,
     });
 
     // Best effort: lagre label umiddelbart for å unngå at gammel label henger igjen

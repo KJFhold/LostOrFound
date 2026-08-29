@@ -1,0 +1,103 @@
+﻿export type Option = { label: string; value: string };
+export type SubOpt = { label: string; value: string };
+
+export const CATEGORIES: Option[] = [
+  { label: "Personlige eiendeler", value: "PERSONAL" },
+  { label: "Elektronikk", value: "ELECTRONICS" },
+  { label: "Vesker og bagasje", value: "BAGS_LUGGAGE" },
+  { label: "Klær og tilbehør", value: "CLOTHING_ACCESSORIES" },
+  { label: "Smykker", value: "JEWELRY" },
+  { label: "Verktøy", value: "TOOLS_HOUSE" },
+  { label: "Bil / transport", value: "VEHICLE_TRANSPORT" },
+  { label: "Sport og friluft", value: "SPORT_OUTDOOR" },
+  { label: "Kultur og hobby", value: "CULTURE_HOBBY" },
+  { label: "Barn og familie", value: "CHILDREN_FAMILY" },
+  { label: "Husdyr", value: "PETS" },
+];
+
+export const SUBCATEGORIES: Record<string, SubOpt[]> = {
+  PERSONAL: [
+    { label: "Nøkler", value: "KEYS" }, { label: "Nøkkelknippe", value: "KEYCHAIN" },
+    { label: "Lommebok", value: "WALLET" }, { label: "Mobiltelefon", value: "MOBILE_PHONE" },
+    { label: "Solbriller", value: "SUNGLASSES" }, { label: "Vanlige briller", value: "GLASSES" },
+    { label: "Brilleetui", value: "GLASSES_CASE" }, { label: "Bankkort", value: "BANK_CARD" },
+    { label: "Adgangskort", value: "ACCESS_CARD" }, { label: "Reisekort", value: "TRAVEL_CARD" },
+    { label: "Studentkort", value: "STUDENT_CARD" }, { label: "ID-kort", value: "ID_CARD" },
+    { label: "Pass", value: "PASSPORT" }, { label: "Førerkort", value: "DRIVER_LICENSE" },
+    { label: "Høreapparat", value: "HEARING_AID" }, { label: "Medisiner", value: "MEDICATION" },
+    { label: "Toalettmappe", value: "TOILETRY_BAG" }, { label: "Annet (personlige)", value: "OTHER_PERSONAL" },
+  ],
+  ELECTRONICS: [
+    { label: "Hodetelefoner / AirPods", value: "HEADPHONES" }, { label: "Ladeetui", value: "CHARGING_CASE" },
+    { label: "Smartklokke", value: "SMARTWATCH" }, { label: "Nettbrett", value: "TABLET" },
+    { label: "Bærbar PC", value: "LAPTOP" }, { label: "Powerbank", value: "POWERBANK" },
+    { label: "Lader", value: "CHARGER" }, { label: "Ladekabel", value: "CHARGING_CABLE" },
+    { label: "Kamera", value: "CAMERA" }, { label: "Høyttaler", value: "SPEAKER" },
+    { label: "Spillkonsoll", value: "GAME_CONSOLE" }, { label: "Elektronisk penn", value: "STYLUS" },
+    { label: "GPS", value: "GPS_DEVICE" }, { label: "Sporingsbrikke", value: "TRACKER_TAG" },
+    { label: "Mobildeksel", value: "PHONE_CASE" }, { label: "Annet (elektronikk)", value: "OTHER_ELECTRONICS" },
+  ],
+  BAGS_LUGGAGE: [
+    { label: "Ryggsekk", value: "BACKPACK" }, { label: "Håndveske", value: "HANDBAG" },
+    { label: "Koffert", value: "SUITCASE" }, { label: "Treningsbag", value: "GYM_BAG" },
+    { label: "Sportsbag", value: "SPORTS_BAG" }, { label: "PC-veske", value: "LAPTOP_BAG" },
+    { label: "Kameraveske", value: "CAMERA_BAG" }, { label: "Verktøybag", value: "TOOL_BAG" },
+    { label: "Skulderveske", value: "SHOULDER_BAG" }, { label: "Dokumentmappe", value: "DOCUMENT_BRIEFCASE" },
+    { label: "Skolesekk", value: "SCHOOL_BAG" }, { label: "Reisebagasje", value: "TRAVEL_LUGGAGE" },
+    { label: "Handlepose", value: "SHOPPING_BAG" }, { label: "Tote-bag", value: "TOTE_BAG" },
+    { label: "Annet (veske/bagasje)", value: "OTHER_BAGS" },
+  ],
+  CLOTHING_ACCESSORIES: [
+    { label: "Jakke", value: "JACKET" }, { label: "Genser", value: "SWEATER" },
+    { label: "Bukse", value: "TROUSERS" }, { label: "Kjole", value: "DRESS" },
+    { label: "Skjorte", value: "SHIRT" }, { label: "Lue", value: "HAT" },
+    { label: "Caps", value: "CAP" }, { label: "Hansker / votter", value: "GLOVES" },
+    { label: "Skjerf", value: "SCARF" }, { label: "Belte", value: "BELT" },
+    { label: "Sko", value: "SHOES" }, { label: "Støvler", value: "BOOTS" },
+    { label: "Paraply", value: "UMBRELLA" }, { label: "Annet (klær/tilbehør)", value: "OTHER_CLOTHING" },
+  ],
+  JEWELRY: [
+    { label: "Ring", value: "RING" }, { label: "Giftering", value: "WEDDING_RING" },
+    { label: "Forlovelsesring", value: "ENGAGEMENT_RING" }, { label: "Signetring", value: "SIGNET_RING" },
+    { label: "Øredobber", value: "EARRINGS" }, { label: "Halskjede", value: "NECKLACE" },
+    { label: "Anheng", value: "PENDANT" }, { label: "Armbånd", value: "BRACELET" },
+    { label: "Klokke", value: "WATCH" }, { label: "Brosje", value: "BROOCH" },
+    { label: "Mansjettknapper", value: "CUFFLINKS" }, { label: "Annet (smykker)", value: "OTHER_JEWELRY" },
+  ],
+  TOOLS_HOUSE: [
+    { label: "Verktøy (generelt)", value: "TOOLS" }, { label: "Måleinstrument", value: "MEASURING_TOOL" },
+    { label: "Batteriverktøy", value: "POWER_TOOL" }, { label: "Annet (verktøy)", value: "OTHER_TOOLS" },
+  ],
+  VEHICLE_TRANSPORT: [
+    { label: "Bilnøkler", value: "CAR_KEYS" }, { label: "Sykkel", value: "BICYCLE" },
+    { label: "Sparkesykkel", value: "SCOOTER" }, { label: "Sykkelhjelm", value: "BIKE_HELMET" },
+    { label: "Bildel / tilbehør", value: "VEHICLE_ACCESSORY" }, { label: "Annet (bil/transport)", value: "OTHER_VEHICLE" },
+  ],
+  SPORT_OUTDOOR: [
+    { label: "Fotball", value: "FOOTBALL" }, { label: "Tennisracket", value: "TENNIS_RACKET" },
+    { label: "Padelracket", value: "PADEL_RACKET" }, { label: "Golfkølle", value: "GOLF_CLUB" },
+    { label: "Golfbag", value: "GOLF_BAG" }, { label: "Fiskestang", value: "FISHING_ROD" },
+    { label: "Hodelykt", value: "HEADLAMP" }, { label: "Campingutstyr", value: "CAMPING_GEAR" },
+    { label: "Tursekk", value: "HIKING_BACKPACK" }, { label: "Sovepose", value: "SLEEPING_BAG" },
+    { label: "Ski", value: "SKIS" }, { label: "Snowboard", value: "SNOWBOARD" },
+    { label: "Hjelm", value: "HELMET" }, { label: "Goggles", value: "GOGGLES" },
+    { label: "Drikkeflaske", value: "WATER_BOTTLE" }, { label: "Annet (sport/friluft)", value: "OTHER_SPORT" },
+  ],
+  CULTURE_HOBBY: [
+    { label: "Bok", value: "BOOK" }, { label: "Instrument", value: "MUSICAL_INSTRUMENT" },
+    { label: "Notatbok", value: "NOTEBOOK" }, { label: "Håndarbeid", value: "CRAFT_ITEM" },
+    { label: "Annet (kultur/hobby)", value: "OTHER_HOBBY" },
+  ],
+  CHILDREN_FAMILY: [
+    { label: "Barnevogn", value: "STROLLER" }, { label: "Kosedyr", value: "STUFFED_TOY" },
+    { label: "Smokk", value: "PACIFIER" }, { label: "Matboks", value: "LUNCH_BOX" },
+    { label: "Leketøy", value: "TOY" }, { label: "Barnesekk", value: "CHILD_BACKPACK" },
+    { label: "Annet (barn/familie)", value: "OTHER_CHILDREN" },
+  ],
+  PETS: [
+    { label: "Hund", value: "DOG" }, { label: "Katt", value: "CAT" }, { label: "Fugl", value: "BIRD" },
+    { label: "Kanin", value: "RABBIT" }, { label: "Marsvin", value: "GUINEA_PIG" },
+    { label: "Skilpadde", value: "TURTLE" }, { label: "Reptil", value: "REPTILE" },
+    { label: "Annet (husdyr)", value: "OTHER_PET" }, { label: "Egendefinert (skriv selv)", value: "CUSTOM" },
+  ],
+};

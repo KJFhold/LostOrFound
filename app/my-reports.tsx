@@ -112,6 +112,17 @@ function titleCase(s?: string | null) {
 }
 
 const SUBCATEGORY_LABELS_EN: Record<string, string> = {
+  KEYCHAIN: "Keychain", GLASSES_CASE: "Glasses case", ACCESS_CARD: "Access card", TRAVEL_CARD: "Travel card", STUDENT_CARD: "Student card", MEDICATION: "Medication", TOILETRY_BAG: "Toiletry bag",
+  CHARGING_CASE: "Charging case", CHARGER: "Charger", CHARGING_CABLE: "Charging cable", SPEAKER: "Speaker", GAME_CONSOLE: "Game console", STYLUS: "Stylus", GPS_DEVICE: "GPS", TRACKER_TAG: "Tracker tag", PHONE_CASE: "Phone case",
+  SPORTS_BAG: "Sports bag", CAMERA_BAG: "Camera bag", TOOL_BAG: "Tool bag", SHOPPING_BAG: "Shopping bag",
+  SWEATER: "Sweater", TROUSERS: "Trousers", DRESS: "Dress", SHIRT: "Shirt", CAP: "Cap", BOOTS: "Boots",
+  WEDDING_RING: "Wedding ring", ENGAGEMENT_RING: "Engagement ring", SIGNET_RING: "Signet ring", PENDANT: "Pendant", BROOCH: "Brooch", CUFFLINKS: "Cufflinks",
+  MEASURING_TOOL: "Measuring tool", POWER_TOOL: "Power tool", BIKE_HELMET: "Bike helmet", VEHICLE_ACCESSORY: "Vehicle accessory",
+  PADEL_RACKET: "Padel racket", GOLF_CLUB: "Golf club", GOLF_BAG: "Golf bag", HIKING_BACKPACK: "Hiking backpack", SLEEPING_BAG: "Sleeping bag",
+  MUSICAL_INSTRUMENT: "Musical instrument", NOTEBOOK: "Notebook", CRAFT_ITEM: "Craft item",
+  STROLLER: "Stroller", STUFFED_TOY: "Stuffed toy", PACIFIER: "Pacifier", LUNCH_BOX: "Lunch box", TOY: "Toy", CHILD_BACKPACK: "Child backpack", OTHER_CHILDREN: "Other child/family item",
+  GUINEA_PIG: "Guinea pig", TURTLE: "Turtle", REPTILE: "Reptile",
+
   KEYS: "Keys",
   WALLET: "Wallet",
   MOBILE_PHONE: "Mobile phone",
@@ -189,13 +200,24 @@ function subcategoryLabel(cat?: string, sub?: string, language: "no" | "en" = "n
   return list.find((x: any) => x.value === sub)?.label ?? sub;
 }
 
+function objectPhrase(r: Report, language: "no" | "en") {
+  const sub = subcategoryLabel(r.category, r.subcategory_key, language);
+  const color = colorLabel(r.color, language);
+  if (!sub) return r.title || (language === "en" ? "item" : "gjenstand");
+  if (!color) return sub.toLowerCase();
+  if (language === "en") return `${color.toLowerCase()} ${sub.toLowerCase()}`;
+  const metal = String(r.color || "").toLowerCase();
+  const compounds: Record<string, Record<string, string>> = {
+    gold: { RING: "gullring", WEDDING_RING: "gullgiftering", ENGAGEMENT_RING: "gullforlovelsesring", SIGNET_RING: "gullsignetring", WATCH: "gullklokke", BRACELET: "gullarmbånd", NECKLACE: "gullhalskjede", EARRINGS: "gulløredobber", PENDANT: "gullanheng", BROOCH: "gullbrosje", CUFFLINKS: "gullmansjettknapper" },
+    silver: { RING: "sølvring", WEDDING_RING: "sølvgiftering", ENGAGEMENT_RING: "sølvforlovelsesring", SIGNET_RING: "sølvsignetring", WATCH: "sølvklokke", BRACELET: "sølvarmbånd", NECKLACE: "sølvhalskjede", EARRINGS: "sølvøredobber", PENDANT: "sølvanheng", BROOCH: "sølvbrosje", CUFFLINKS: "sølvmansjettknapper" },
+    bronze: { RING: "bronsering", WATCH: "bronseklokke", BRACELET: "bronsearmbånd", NECKLACE: "bronsehalskjede", PENDANT: "bronseanheng" },
+  };
+  return compounds[metal]?.[String(r.subcategory_key || "").toUpperCase()] || `${color.toLowerCase()} ${sub.toLowerCase()}`;
+}
 function prettyReportTitle(r: Report, language: "no" | "en") {
   const typ = r.type === "LOST" ? (language === "en" ? "Lost" : "Mistet") : (language === "en" ? "Found" : "Funnet");
-  const sub = subcategoryLabel(r.category, r.subcategory_key, language);
-  const col = colorLabel(r.color, language);
+  const core = objectPhrase(r, language);
   const brand = titleCase(r.brand);
-  const parts = [col ? col.toLowerCase() : null, sub ? sub.toLowerCase() : null].filter(Boolean);
-  const core = parts.length ? parts.join(" ") : (r.title ?? typ);
   const tail = brand ? ` (${brand})` : "";
   const placeShort = shortPlace(r.location_label);
   const place = placeShort ? ` ${language === "en" ? "in" : "i"} ${placeShort}` : "";

@@ -100,7 +100,8 @@ function localizeCategoryLabel(label: string | undefined, language: "no" | "en")
     "Bil / transport": "Vehicle / transport",  
     "Sport og friluft": "Sports and outdoors",  
     "Kultur og hobby": "Culture and hobbies",  
-    "Husdyr": "Pets",  
+    "Husdyr": "Pets",
+    "Barn og familie": "Children and family",  
     "Nøkler": "Keys",  
     "Lommebok": "Wallet",  
     "Mobiltelefon": "Mobile phone",  
@@ -202,6 +203,16 @@ function localizeObjectLabel(value: string | undefined, fallbackLabel: string | 
     CAT: "Cat",
     BIRD: "Bird",
     RABBIT: "Rabbit",
+    KEYCHAIN: "Keychain", GLASSES_CASE: "Glasses case", ACCESS_CARD: "Access card", TRAVEL_CARD: "Travel card", STUDENT_CARD: "Student card", MEDICATION: "Medication", TOILETRY_BAG: "Toiletry bag",
+    CHARGING_CASE: "Charging case", CHARGER: "Charger", CHARGING_CABLE: "Charging cable", SPEAKER: "Speaker", GAME_CONSOLE: "Game console", STYLUS: "Stylus", GPS_DEVICE: "GPS", TRACKER_TAG: "Tracker tag", PHONE_CASE: "Phone case",
+    SPORTS_BAG: "Sports bag", CAMERA_BAG: "Camera bag", TOOL_BAG: "Tool bag", SHOPPING_BAG: "Shopping bag",
+    SWEATER: "Sweater", TROUSERS: "Trousers", DRESS: "Dress", SHIRT: "Shirt", CAP: "Cap", BOOTS: "Boots",
+    WEDDING_RING: "Wedding ring", ENGAGEMENT_RING: "Engagement ring", SIGNET_RING: "Signet ring", PENDANT: "Pendant", BROOCH: "Brooch", CUFFLINKS: "Cufflinks",
+    MEASURING_TOOL: "Measuring tool", POWER_TOOL: "Power tool", BIKE_HELMET: "Bike helmet", VEHICLE_ACCESSORY: "Vehicle accessory",
+    PADEL_RACKET: "Padel racket", GOLF_CLUB: "Golf club", GOLF_BAG: "Golf bag", HIKING_BACKPACK: "Hiking backpack", SLEEPING_BAG: "Sleeping bag",
+    MUSICAL_INSTRUMENT: "Musical instrument", NOTEBOOK: "Notebook", CRAFT_ITEM: "Craft item",
+    STROLLER: "Stroller", STUFFED_TOY: "Stuffed toy", PACIFIER: "Pacifier", LUNCH_BOX: "Lunch box", TOY: "Toy", CHILD_BACKPACK: "Child backpack", OTHER_CHILDREN: "Other child/family item",
+    GUINEA_PIG: "Guinea pig", TURTLE: "Turtle", REPTILE: "Reptile",
     OTHER_PET: "Other pet",
     CUSTOM: "Custom (type your own)",
   };
@@ -229,6 +240,14 @@ function objectSearchAliases(value: string | undefined, noLabel: string | undefi
     CAT: ["katt", "cat", "kitten"],
     BICYCLE: ["sykkel", "bike", "bicycle"],
     BACKPACK: ["ryggsekk", "sekk", "backpack", "rucksack"],
+    CHARGER: ["lader", "charger", "mobillader", "phone charger"],
+    CHARGING_CASE: ["ladeetui", "airpods etui", "charging case", "earbud case"],
+    ACCESS_CARD: ["adgangskort", "nøkkelkort", "access card", "key card"],
+    WEDDING_RING: ["giftering", "wedding ring"],
+    ENGAGEMENT_RING: ["forlovelsesring", "engagement ring"],
+    STUFFED_TOY: ["kosedyr", "bamse", "stuffed toy", "teddy bear"],
+    PACIFIER: ["smokk", "pacifier", "dummy"],
+    LUNCH_BOX: ["matboks", "lunch box"],
   };
   return [...base, ...(aliases[key] ?? [])].join(" ");
 }
@@ -379,6 +398,10 @@ export default function CreateReportScreen() {
   const editLoadedRef = useRef<string | null>(null);  
   const [categoryAnchorY, setCategoryAnchorY] = useState(0);  
   const [saving, setSaving] = useState(false);
+  const [validationMissing, setValidationMissing] = useState<string[]>([]);
+  const [validationOpen, setValidationOpen] = useState(false);
+  const [objectSectionY, setObjectSectionY] = useState(0);
+  const [timeSectionY, setTimeSectionY] = useState(0);
   const [editLoading, setEditLoading] = useState(false);  
   const [catOpen, setCatOpen] = useState(false);  
   const [colorOpen, setColorOpen] = useState(false);  
@@ -689,54 +712,28 @@ const subcategoryLabel = useMemo(() => {
     ].filter(Boolean);  
     return parts.join(" • ");  
   }, [type, categoryLabel, subcategoryKey, subcategoryLabel, subcategoryCustom, category, brand, colorLabel, colorSecondary, color2Label, language]);  
-  const validate = () => {  
-    if (!category.trim()) {  
-      Alert.alert(language === "en" ? "Missing selection" : "Mangler valg", language === "en" ? `Choose ${whatLabel.toLowerCase()}.` : `Velg ${whatLabel.toLowerCase()}.`);  
-      return false;  
-    }  
-    if (subOptions.length > 0 && !subcategoryKey) {  
-      Alert.alert(language === "en" ? "Missing selection" : "Mangler valg", language === "en" ? "Choose subcategory." : "Velg underkategori.");  
-      return false;  
-    }  
-    if (category === "PETS" && subcategoryKey === "CUSTOM" && !subcategoryCustom.trim()) {  
-      Alert.alert(language === "en" ? "Missing details" : "Mangler spesifisering", language === "en" ? "Enter the type of pet (custom)." : "Skriv inn hvilken type husdyr (egendefinert). ");  
-      return false;  
-    }  
-    if (  
-      typeof latitude !== "number" ||  
-      typeof longitude !== "number" ||  
-      Number.isNaN(latitude) ||  
-      Number.isNaN(longitude)  
-    ) {  
-      Alert.alert(language === "en" ? "Invalid position" : "Ugyldig posisjon", language === "en" ? "Check that latitude/longitude are valid numbers." : "Sjekk at lat/lng er gyldige tall.");  
-      return false;  
-    }  
-    if (!locationLabel.trim()) {  
-      Alert.alert(  
-        language === "en" ? "Place required" : "Sted kreves",  
-        language === "en" ? "Choose the place on the map or enter an address / place description." : "Velg sted på kart eller skriv inn adresse / stedsbeskrivelse."  
-      );  
-      return false;  
-    }  
-    // Tidspunkt: valider dato/tid og synk til draft  
-    const iso = toISO(dateStr.trim(), timeStr.trim());  
-    if (!iso) {  
-      Alert.alert(language === "en" ? "Invalid time" : "Ugyldig tidspunkt", language === "en" ? "Use format YYYY-MM-DD and HH:mm, for example 2026-03-17 14:30." : "Bruk format YYYY-MM-DD og HH:mm, f.eks. 2026-03-17 14:30.");  
-      return false;  
-    }  
-    setField("occurredAtISO" as any, iso);  
-    if (type === "LOST" && rewardEnabled) {  
-      const n = Number(rewardNOK);  
-      if (Number.isNaN(n) || n < 0) {  
-        Alert.alert(  
-          language === "en" ? "Invalid reward" : "Ugyldig finnerlønn",  
-          language === "en" ? `Enter an amount in ${activeCurrency} (0 is allowed).` : `Oppgi et tall i ${activeCurrency} (kan være 0).`  
-        );  
-        return false;  
-      }  
-    }  
-    return true;  
-  };  
+  const validate = () => {
+    const missing: string[] = [];
+    let firstY = 0;
+    if (!subcategoryKey) { missing.push(language === "en" ? "Item" : "Gjenstand"); firstY = objectSectionY; }
+    if (category === "PETS" && subcategoryKey === "CUSTOM" && !subcategoryCustom.trim()) { missing.push(language === "en" ? "Type of pet" : "Type husdyr"); firstY = firstY || objectSectionY; }
+    const iso = toISO(dateStr.trim(), timeStr.trim());
+    if (!iso) { missing.push(language === "en" ? "Date and time" : "Dato og tidspunkt"); firstY = firstY || timeSectionY; }
+    if (!locationLabel.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude)) { missing.push(language === "en" ? "Location" : "Sted"); firstY = firstY || timeSectionY; }
+    if (type === "LOST" && rewardEnabled) {
+      const n = Number(rewardNOK || "0");
+      if (!Number.isFinite(n) || n < 0) { missing.push(language === "en" ? "Valid reward amount" : "Gyldig finnerlønn"); }
+    }
+    if (missing.length) {
+      setValidationMissing(missing);
+      setValidationOpen(true);
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, firstY - 12), animated: true }));
+      return false;
+    }
+    setValidationMissing([]);
+    if (iso) setField("occurredAtISO" as any, iso);
+    return true;
+  };
   const addFromGallery = async () => {  
     try {  
       const uri = await pickOneImage();  
@@ -1132,7 +1129,7 @@ const subcategoryLabel = useMemo(() => {
 
               <View onLayout={(e) => setCategoryAnchorY(e.nativeEvent.layout.y)} />
               <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Selected item" : "Valgt gjenstand"}</Text>
-              <View style={styles.selectedObjectBox}>
+              <View style={[styles.selectedObjectBox, validationMissing.some((x) => x === "Item" || x === "Gjenstand") && styles.inputError]}>
                 <Text style={styles.selectedObjectTxt}>{subcategoryLabel}</Text>
               </View>
 
@@ -1444,6 +1441,17 @@ const subcategoryLabel = useMemo(() => {
             <View style={{ height: theme.space.xl }} />  
           </ScrollView>  
         </KeyboardAvoidingView>  
+ <Modal visible={validationOpen} transparent animationType="fade" onRequestClose={() => setValidationOpen(false)}>
+   <View style={modalStyles.backdrop}>
+     <View style={modalStyles.card}>
+       <View style={[modalStyles.icon, { backgroundColor: "#FEF3C7" }]}><Text style={[modalStyles.iconTxt, { color: "#B45309" }]}>!</Text></View>
+       <Text style={modalStyles.title}>{language === "en" ? "The report is incomplete" : "Rapporten er ikke fullstendig"}</Text>
+       <Text style={modalStyles.body}>{language === "en" ? "Complete the highlighted fields before submitting the report." : "Fyll ut de markerte feltene før rapporten sendes inn."}</Text>
+       <View style={styles.missingList}>{validationMissing.map((item) => <Text key={item} style={styles.missingItem}>• {item}</Text>)}</View>
+       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => setValidationOpen(false)}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Go to first missing field" : "Gå til første manglende felt"}</Text></Pressable>
+     </View>
+   </View>
+ </Modal>
  {/* Lagret-modal (proff) */}  
  <Modal  
    visible={savedOpen}  
@@ -1552,6 +1560,10 @@ const styles = StyleSheet.create({
     ...theme.shadow.card,  
   },  
   // Løft kortet over andre når dropdown er åpen (hindrer at meny skjules bak andre cards)  
+  cardError: { borderColor: "#F59E0B", borderWidth: 1.5 },
+  inputError: { borderColor: theme.colors.danger, borderWidth: 1.5, backgroundColor: "#FFF7F7" },
+  missingList: { marginTop: 14, backgroundColor: "#FFF7ED", borderRadius: 12, padding: 12 },
+  missingItem: { color: "#9A3412", fontWeight: "800", marginVertical: 2 },
   cardOnTop: {  
     zIndex: 5000,  
     ...Platform.select({ android: { elevation: 30 } }),  

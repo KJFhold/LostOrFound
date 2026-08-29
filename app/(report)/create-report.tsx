@@ -304,9 +304,7 @@ const toISO = (dateStr: string, timeStr: string): string | undefined => {
   if (Number.isNaN(dt.getTime())) return undefined;  
   return dt.toISOString();  
 };  
-function createClientRequestId() {
-  return `report-${Date.now()}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
-}
+function createClientRequestId() { return `report-${Date.now()}-${Math.random().toString(36).slice(2,12)}-${Math.random().toString(36).slice(2,12)}`; }
 class ReportApiError extends Error {
   status: number;
   code?: string;
@@ -404,7 +402,9 @@ export default function CreateReportScreen() {
   const networkSubmitRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
   const [limitDialogOpen, setLimitDialogOpen] = useState(false);
-  const [limitOverrideAllowed, setLimitOverrideAllowed] = useState(false);
+  const [imageRetryOpen, setImageRetryOpen] = useState(false);
+  const [retryReportId, setRetryReportId] = useState<string | null>(null);
+  const [retryImageUris, setRetryImageUris] = useState<string[]>([]);
   const [validationMissing, setValidationMissing] = useState<string[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
   const [objectSectionY, setObjectSectionY] = useState(0);
@@ -421,7 +421,8 @@ export default function CreateReportScreen() {
   const [subQuery, setSubQuery] = useState("");  
   const [objectQuery, setObjectQuery] = useState("");  
   const [objectOpen, setObjectOpen] = useState(false);  
-  const [pendingImages, setPendingImages] = useState<string[]>([]);  
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);  
   const [uploading, setUploading] = useState(false);  
  // Lagret-modal (proff)  
  const [savedOpen, setSavedOpen] = useState(false);  
@@ -621,11 +622,19 @@ const subcategoryLabel = useMemo(() => {
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error ?? (language === "en" ? "Could not load case." : "Kunne ikke hente saken."));
         const report = json?.report;
+        const existingPaths = (json?.images ?? []).map((x: any) => String(x?.path ?? "")).filter(Boolean);
+        if (existingPaths.length) {
+          try {
+            const signedRes = await fetch(`${API_BASE_URL}/storage/signed-download-batch`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ paths: existingPaths }) });
+            const signedJson = await signedRes.json().catch(() => ({}));
+            if (signedRes.ok) setExistingImageUrls(existingPaths.map((path: string) => signedJson?.urls?.[path]).filter(Boolean));
+          } catch { setExistingImageUrls([]); }
+        } else setExistingImageUrls([]);
         if (!report) throw new Error(language === "en" ? "Case was not found." : "Fant ikke saken.");
-        if (report.type !== "LOST") throw new Error(language === "en" ? "Only lost reports can be edited for now." : "Foreløpig kan bare mistet-rapporter redigeres.");
+
         if (!alive) return;
         editLoadedRef.current = editReportId;
-        setField("type" as any, "LOST");
+        setField("type" as any, report.type === "FOUND" ? "FOUND" : "LOST");
         setField("category" as any, report.category ?? "PERSONAL");
         setField("subcategoryKey" as any, report.subcategory_key ?? "");
         setField("subcategoryCustom" as any, report.subcategory_custom ?? "");
@@ -911,29 +920,7 @@ const subcategoryLabel = useMemo(() => {
       log("POST /reports ok", data);  
       const reportId: string | null = data?.report?.id ?? data?.id ?? null;  
       let count = data?.candidates?.length ?? 0;  
-    // Hent faktisk match-count (match-motor kan være async etter lagring)  
-    let matchCount: number | null = null;  
-    if (reportId && accessToken) {  
-      const fetchCount = async () => {  
-        const rr = await fetch(`${API_BASE_URL}/matches?reportId=${encodeURIComponent(String(reportId))}`, {  
-          headers: { Authorization: `Bearer ${accessToken}` },  
-        });  
-        const jj = await rr.json().catch(() => ({}));  
-        if (!rr.ok) throw new Error(jj?.error ?? "Kunne ikke hente matcher");  
-        const list = jj?.matches ?? [];  
-        return Array.isArray(list) ? list.length : 0;  
-      };  
-      try {  
-        matchCount = await fetchCount();  
-        if (matchCount === 0) {  
-          await new Promise((res) => setTimeout(res, 700));  
-          matchCount = await fetchCount();  
-        }  
-      } catch {  
-        matchCount = null;  
-      }  
-    }  
-    if (matchCount != null) count = matchCount;  
+    // Match count updates on My cases; do not delay report completion here.  
       if (reportId && pendingImages.length > 0) {  
         try {  
           setUploading(true);  
@@ -1003,11 +990,9 @@ const subcategoryLabel = useMemo(() => {
           );  
         } finally {  
           setUploading(false);  
-          setPendingImages([]);  
         }  
       }  
-      reset();
-      requestIdRef.current = null;
+      if (!imageRetryOpen) { reset(); requestIdRef.current = null; }
       if (reportId) {  
   setSavedType(type);  
   setSavedReportId(String(reportId));  
@@ -1024,7 +1009,6 @@ const subcategoryLabel = useMemo(() => {
       const testOverrideAllowed = e?.testOverrideAllowed === true;
 
       if (code === "LOST_REPORT_WEEKLY_LIMIT" && testOverrideAllowed && !options?.testOverrideWeeklyLimit) {
-        setLimitOverrideAllowed(true);
         setLimitDialogOpen(true);
         return;
       }
@@ -1063,6 +1047,34 @@ const subcategoryLabel = useMemo(() => {
     rewardEnabled,  
     activeCurrency,  
   ]);  
+  const retryImagesOnly = async () => {
+    if (!retryReportId || retryImageUris.length === 0 || uploading) return;
+    try {
+      setUploading(true);
+      const results = await Promise.allSettled(
+        retryImageUris.map((uri, index) => uploadReportImage(retryReportId, uri, index))
+      );
+      const failedUris = results
+        .map((result, index) => ({ result, uri: retryImageUris[index] }))
+        .filter(({ result }) => result.status === "rejected")
+        .map(({ uri }) => uri);
+      if (failedUris.length > 0) {
+        setRetryImageUris(failedUris);
+        return;
+      }
+      setImageRetryOpen(false);
+      setRetryReportId(null);
+      setRetryImageUris([]);
+      setPendingImages([]);
+      requestIdRef.current = null;
+      await reset();
+    } catch (error) {
+      console.warn("[create-report] image retry failed", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   submitRef.current = onSubmit;
 
   return (  
@@ -1110,7 +1122,7 @@ const subcategoryLabel = useMemo(() => {
               </Pressable>  
             </View>  
             {/* CARD: Objekt */}
-            <View onLayout={(e) => setObjectSectionY(e.nativeEvent.layout.y)} style={styles.card}>
+            <View onLayout={(e) => setObjectSectionY(e.nativeEvent.layout.y)} style={[styles.card, objectOpen && styles.cardOnTop]}>
               <Text style={styles.h2}>{whatLabel}</Text>
               <Text style={styles.caption}>{language === "en" ? "Item" : "Gjenstand"}</Text>
               <Text style={styles.muted}>{language === "en" ? "Type what was lost or found. For example: wedding ring, keys, sunglasses, dog." : "Skriv hva du har mistet eller funnet. For eksempel: giftering, nøkler, solbriller, hund."}</Text>
@@ -1147,7 +1159,8 @@ const subcategoryLabel = useMemo(() => {
                         <Text style={styles.muted}>{language === "en" ? "No item found. Try another word, or describe it in the comment field." : "Fant ikke gjenstanden. Prøv et annet ord, eller beskriv den i kommentarfeltet."}</Text>
                       </View>
                     ) : (
-                      filteredObjects.map((hit) => (
+                      <ScrollView style={styles.objectResultsScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {filteredObjects.map((hit) => (
                         <Pressable
                           key={`${hit.catKey}:${hit.subKey}`}
                           style={styles.selectItem}
@@ -1155,7 +1168,8 @@ const subcategoryLabel = useMemo(() => {
                         >
                           <Text style={styles.selectItemTxt}>{localizeObjectLabel(hit.subKey, hit.subLabel, language)}</Text>
                         </Pressable>
-                      ))
+                      ))}
+                      </ScrollView>
                     )}
                   </View>
                 )}
@@ -1444,6 +1458,14 @@ const subcategoryLabel = useMemo(() => {
                   <Text style={styles.primaryBtnTxt}>{language === "en" ? "Take photo" : "Ta bilde"}</Text>  
                 </Pressable>  
               </View>  
+              {existingImageUrls.length > 0 && (
+                <View style={{ marginTop: theme.space.md }}>
+                  <Text style={styles.caption}>{language === "en" ? "Already saved" : "Allerede lagret"}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: theme.space.sm }}>
+                    {existingImageUrls.map((uri) => <Image key={uri} source={{ uri }} style={{ width: 120, height: 120, borderRadius: theme.radius.md, marginRight: theme.space.md, marginBottom: theme.space.md }} />)}
+                  </View>
+                </View>
+              )}
               {pendingImages.length === 0 ? (  
                 <Text style={styles.muted}>{language === "en" ? "No images selected yet." : "Ingen bilder valgt ennå."}</Text>  
               ) : (  
@@ -1501,13 +1523,22 @@ const subcategoryLabel = useMemo(() => {
  </Modal>
  <Modal visible={limitDialogOpen} transparent animationType="fade" onRequestClose={() => setLimitDialogOpen(false)}>
    <View style={modalStyles.backdrop}><View style={modalStyles.card}>
-     <View style={[modalStyles.icon, { backgroundColor: "#FEF3C7" }]}><Text style={[modalStyles.iconTxt, { color: "#B45309" }]}>!</Text></View>
+     <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
      <Text style={modalStyles.title}>{language === "en" ? "Report limit reached" : "Grensen er nådd"}</Text>
-     <Text style={modalStyles.body}>{language === "en" ? "You can normally create up to two lost reports within seven days. This account is approved for testing and may create the report anyway." : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av sju dager. Denne kontoen er godkjent for testing og kan opprette rapporten likevel."}</Text>
-     <Text style={styles.testOnlyNote}>{language === "en" ? "Available to approved test users only" : "Kun tilgjengelig for godkjente testbrukere"}</Text>
-     {limitOverrideAllowed && <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => { setLimitDialogOpen(false); setTimeout(() => void submitRef.current({ testOverrideWeeklyLimit: true }), 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>}
-     <Pressable style={[modalStyles.btn, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => { setLimitDialogOpen(false); router.replace("/my-reports"); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
-     <Pressable style={{ marginTop: 14, alignItems: "center", paddingVertical: 8 }} onPress={() => setLimitDialogOpen(false)}><Text style={styles.cancelLink}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
+     <Text style={modalStyles.body}>{language === "en" ? "You can normally create up to two lost reports within seven days. Test mode is enabled for this account." : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av sju dager. Testmodus er aktivert for denne kontoen."}</Text>
+     <Pressable style={[modalStyles.btn,modalStyles.btnPrimary,{marginTop:16}]} onPress={() => {setLimitDialogOpen(false);setTimeout(()=>void submitRef.current({testOverrideWeeklyLimit:true}),0)}}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>
+     <Pressable style={[modalStyles.btn,modalStyles.btnOutline,{marginTop:10}]} onPress={() => {setLimitDialogOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
+     <Pressable style={styles.dialogTextBtn} onPress={() => setLimitDialogOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
+   </View></View>
+ </Modal>
+ <Modal visible={imageRetryOpen} transparent animationType="fade" onRequestClose={() => setImageRetryOpen(false)}>
+   <View style={modalStyles.backdrop}><View style={modalStyles.card}>
+     <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
+     <Text style={modalStyles.title}>{language === "en" ? "The report was saved" : "Rapporten er lagret"}</Text>
+     <Text style={modalStyles.body}>{language === "en" ? "The image could not be uploaded. Try again now, or add it later from My cases." : "Bildet kunne ikke lastes opp. Prøv igjen nå, eller legg det til senere fra Mine saker."}</Text>
+     <Pressable style={[modalStyles.btn,modalStyles.btnPrimary,{marginTop:16}]} disabled={uploading} onPress={() => void retryImagesOnly()}><Text style={modalStyles.btnPrimaryTxt}>{uploading ? (language === "en" ? "Uploading image…" : "Laster opp bilde…") : (language === "en" ? "Try image again" : "Prøv bildet på nytt")}</Text></Pressable>
+     <Pressable style={[modalStyles.btn,modalStyles.btnOutline,{marginTop:10}]} onPress={() => {setImageRetryOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
+     <Pressable style={styles.dialogTextBtn} onPress={() => setImageRetryOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Close" : "Lukk"}</Text></Pressable>
    </View></View>
  </Modal>
  {/* Lagret-modal (proff) */}  
@@ -1625,8 +1656,8 @@ const styles = StyleSheet.create({
   unconfirmedText: { marginTop: 9, color: "#B45309", fontWeight: "800", fontSize: 12 },
   missingList: { marginTop: 14, backgroundColor: "#FFF7ED", borderRadius: 12, padding: 12 },
   missingItem: { color: "#9A3412", fontWeight: "800", marginVertical: 2 },
-  testOnlyNote: { marginTop: 12, textAlign: "center", color: "#B45309", fontWeight: "800", fontSize: 12 },
-  cancelLink: { color: theme.colors.muted, fontWeight: "800" },
+  dialogTextBtn: { marginTop: 12, paddingVertical: 9, alignItems: "center" },
+  dialogText: { color: theme.colors.muted, fontWeight: "800" },
   cardOnTop: {  
     zIndex: 5000,  
     ...Platform.select({ android: { elevation: 30 } }),  
@@ -1675,7 +1706,8 @@ const styles = StyleSheet.create({
     marginTop: 0,  
     paddingVertical: 10,  
   },  
-  selectWrap: { position: "relative", marginTop: theme.space.sm },  
+  selectWrap: { position: "relative", marginTop: theme.space.sm },
+  objectResultsScroll: { maxHeight: 260 },  
   selectWrapOn: { zIndex: 9999, ...(Platform.OS === "android" ? { elevation: 9999 } : {}) },  
   selectBtn: {  
     backgroundColor: theme.colors.card,  

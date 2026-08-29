@@ -21,7 +21,7 @@ import { supabase } from "../../src/lib/supabase";
 import { ensureFoundIdentity, ensureLostAuthenticated } from "../../src/lib/authGate";  
 import { ensureProfileRow } from "../../src/lib/profile";  
 import { reverseGeocodeToLabel } from "../../src/lib/reverseGeocode";  
-import { CATEGORIES, SUBCATEGORIES } from "../../src/lib/categories";  
+import { CATEGORIES, SUBCATEGORIES, OBJECT_LABELS_EN, objectLabel, objectSearchText } from "../../src/lib/categories";  
 import { theme } from "../../src/ui/theme";  
 import { PremiumHeader } from "../../src/ui/PremiumHeader";  
 import { useI18n } from "../../src/i18n/I18nProvider";  
@@ -222,7 +222,7 @@ function localizeObjectLabel(value: string | undefined, fallbackLabel: string | 
 
 function objectSearchAliases(value: string | undefined, noLabel: string | undefined, enLabel: string | undefined) {
   const key = String(value ?? "").toUpperCase();
-  const base = [key, noLabel ?? "", enLabel ?? ""];
+  const base = [objectSearchText(key, noLabel ?? "", enLabel), key, noLabel ?? "", enLabel ?? ""];
   const aliases: Record<string, string[]> = {
     KEYS: ["nokkel", "nokler", "nøkkel", "nøkler", "keys", "key", "husnokkel", "bilnokkel"],
     CAR_KEYS: ["bilnokkel", "bilnøkler", "car key", "car keys", "carkey"],

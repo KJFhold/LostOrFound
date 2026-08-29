@@ -17,7 +17,7 @@ import { API_BASE_URL } from "../src/lib/config";
 import { theme } from "../src/ui/theme";
 import { getLastSeenMap } from "../src/lib/unread";
 import { useAuth } from "../src/contexts/AuthContext";
-import { SUBCATEGORIES } from "../src/lib/categories";
+import { SUBCATEGORIES, OBJECT_LABELS_EN } from "../src/lib/categories";
 import { shortPlace } from "../src/lib/places";
 import { PremiumHeader } from "../src/ui/PremiumHeader";
 import { AuthHeaderAction } from "../src/ui/AuthHeaderAction";
@@ -112,6 +112,7 @@ function titleCase(s?: string | null) {
 }
 
 const SUBCATEGORY_LABELS_EN: Record<string, string> = {
+  ...OBJECT_LABELS_EN,
   KEYCHAIN: "Keychain", GLASSES_CASE: "Glasses case", ACCESS_CARD: "Access card", TRAVEL_CARD: "Travel card", STUDENT_CARD: "Student card", MEDICATION: "Medication", TOILETRY_BAG: "Toiletry bag",
   CHARGING_CASE: "Charging case", CHARGER: "Charger", CHARGING_CABLE: "Charging cable", SPEAKER: "Speaker", GAME_CONSOLE: "Game console", STYLUS: "Stylus", GPS_DEVICE: "GPS", TRACKER_TAG: "Tracker tag", PHONE_CASE: "Phone case",
   SPORTS_BAG: "Sports bag", CAMERA_BAG: "Camera bag", TOOL_BAG: "Tool bag", SHOPPING_BAG: "Shopping bag",

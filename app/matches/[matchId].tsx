@@ -20,7 +20,7 @@ import { API_BASE_URL } from "../../src/lib/config";
 import { supabase } from "../../src/lib/supabase";  
 import { getLastSeenMap } from "../../src/lib/unread";  
 import { useAuth } from "../../src/contexts/AuthContext";  
-import { CATEGORIES, SUBCATEGORIES } from "../../src/lib/categories";  
+import { CATEGORIES, SUBCATEGORIES, OBJECT_LABELS_EN, objectLabel, objectSearchText } from "../../src/lib/categories";  
 import { shortPlace } from "../../src/lib/places";  
 import { PremiumHeader } from "../../src/ui/PremiumHeader";  
 import { AuthHeaderAction } from "../../src/ui/AuthHeaderAction";  
@@ -67,6 +67,7 @@ type LastMsg = {
 type AppLang = "no" | "en";
 
 const SUBCATEGORY_LABELS_EN: Record<string, string> = {
+  ...OBJECT_LABELS_EN,
   KEYS: "Keys",
   WALLET: "Wallet",
   MOBILE_PHONE: "Mobile phone",

@@ -528,26 +528,9 @@ export default function MyReportsScreen() {
 
   const confirmDelete = (r: Report) => setConfirmDialog({ kind: "delete", report: r });
 
-  const dialogTitle = confirmDialog?.kind === "extend"
-    ? (language === "en" ? "Reactivate found report?" : "Aktiver funnet-rapporten igjen?")
-    : confirmDialog?.kind === "close"
-    ? (language === "en" ? "Close case?" : "Avslutt sak?")
-    : (language === "en" ? "Delete case?" : "Slett sak?");
-
-  const dialogBody = confirmDialog?.kind === "extend"
-    ? (language === "en" ? "Keep the report active for up to 30 more days. Found reports can remain active for a maximum of 90 days." : "Hold rapporten aktiv i opptil 30 nye dager. Funnet-rapporter kan være aktive i maksimalt 90 dager.")
-    : confirmDialog?.kind === "close"
-    ? (language === "en" ? "The case stays in My cases, but it will no longer be used for new matches." : "Saken beholdes i Mine saker, men brukes ikke lenger for nye treff.")
-    : (language === "en" ? "This permanently deletes the case, including photos and matches. This cannot be undone." : "Dette sletter saken permanent, inkludert bilder og treff. Handlingen kan ikke angres.");
-
-  const runDialogAction = async () => {
-    const current = confirmDialog;
-    if (!current) return;
-    setConfirmDialog(null);
-    if (current.kind === "extend") await extendFoundReport(current.report);
-    else if (current.kind === "close") await closeReport(current.report);
-    else await deleteReport(current.report.id);
-  };
+  const dialogTitle = confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate found report?" : "Aktiver funnet-rapporten igjen?") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case?" : "Avslutt sak?") : (language === "en" ? "Delete case?" : "Slett sak?");
+  const dialogBody = confirmDialog?.kind === "extend" ? (language === "en" ? "Keep the report active for up to 30 more days. Found reports can remain active for a maximum of 90 days." : "Hold rapporten aktiv i opptil 30 nye dager. Funnet-rapporter kan være aktive i maksimalt 90 dager.") : confirmDialog?.kind === "close" ? (language === "en" ? "The case stays in My cases, but it will no longer be used for new matches." : "Saken beholdes i Mine saker, men brukes ikke lenger for nye treff.") : (language === "en" ? "This permanently deletes the case, including photos and matches. This cannot be undone." : "Dette sletter saken permanent, inkludert bilder og treff. Handlingen kan ikke angres.");
+  const runDialogAction = async () => { const current = confirmDialog; if (!current) return; setConfirmDialog(null); if (current.kind === "extend") await extendFoundReport(current.report); else if (current.kind === "close") await closeReport(current.report); else await deleteReport(current.report.id); };
 
   return (
     <>
@@ -578,122 +561,35 @@ export default function MyReportsScreen() {
         ) : (
           <ScrollView contentContainerStyle={styles.list}>
             {reports.map((r) => {
-              const act = activityByReport[r.id] ?? null;
-              const actFromMe = act?.sender_id === user?.id;
-              const statusInfo = reportStatusInfo(r, language);
-              const isClosed = r.status === "CLOSED" || !!r.closed_at;
-              const isExpired = r.status === "EXPIRED" || (!!r.visible_until && Date.parse(r.visible_until) <= Date.now());
-              const latestChatId = act?.match_id;
-              const count = matchCountByReport[r.id] ?? 0;
-              return (
-                <View key={r.id} style={styles.card}>
-                  <View style={styles.cardTopRow}>
-                    <Text style={[styles.kindBadge, r.type === "FOUND" && styles.kindBadgeFound]}>
-                      {r.type === "LOST" ? (language === "en" ? "LOST" : "MISTET") : (language === "en" ? "FOUND" : "FUNNET")}
-                    </Text>
-                    <Text style={[styles.statusBadge, isExpired && styles.statusExpired, isClosed && styles.statusClosed]}>{statusInfo.label}</Text>
-                  </View>
-
-                  <Text style={styles.title}>{prettyReportTitle(r, language).replace(/^Lost:\s*|^Found:\s*|^Mistet:\s*|^Funnet:\s*/i, "")}</Text>
-                  <Text style={styles.meta}>{language === "en" ? "Reported" : "Registrert"} {new Date(r.created_at).toLocaleDateString()}</Text>
-
-                  {r.type === "FOUND" && (
-                    <Text style={styles.extensionInfo}>
-                      {language === "en" ? `${Number(r.extension_count || 0)} of 2 extensions used` : `${Number(r.extension_count || 0)} av 2 forlengelser brukt`}
-                    </Text>
-                  )}
-
-                  {act && (
-                    <Text style={styles.lastLine} numberOfLines={2}>
-                      {language === "en" ? "Latest chat" : "Siste chat"}: {actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} · {formatTime(act.at)} · {shortMessage(act.body)}
-                    </Text>
-                  )}
-                  {unreadByReport[r.id] && <Text style={styles.unread}>● {language === "en" ? "New message" : "Ny melding"}</Text>}
-
-                  <View style={styles.primaryActions}>
-                    {latestChatId && (
-                      <Pressable style={styles.primaryBtn} onPress={() => router.push(`/chat/${latestChatId}`)}>
-                        <Text style={styles.primaryBtnText}>{language === "en" ? "Open chat" : "Åpne chat"}</Text>
-                      </Pressable>
-                    )}
-                    <Pressable style={[styles.primaryBtn, latestChatId && styles.secondaryPrimary]} onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}>
-                      <Text style={[styles.primaryBtnText, latestChatId && styles.secondaryPrimaryText]}>{language === "en" ? `View matches (${count})` : `Se treff (${count})`}</Text>
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.secondaryActions}>
-                    {r.type === "LOST" && !isClosed && <Pressable onPress={() => editReport(r)}><Text style={styles.secondaryLink}>{language === "en" ? "Edit" : "Rediger"}</Text></Pressable>}
-                    {canExtendFound(r) && <Pressable onPress={() => confirmExtendFound(r)}><Text style={styles.extendLink}>{isExpired ? (language === "en" ? "Reactivate" : "Aktiver igjen") : (language === "en" ? "Extend" : "Forleng")}</Text></Pressable>}
-                    {!isClosed && <Pressable onPress={() => confirmClose(r)}><Text style={styles.secondaryLink}>{language === "en" ? "Close" : "Avslutt"}</Text></Pressable>}
-                    <Pressable onPress={() => confirmDelete(r)}><Text style={styles.deleteLink}>{language === "en" ? "Delete" : "Slett"}</Text></Pressable>
-                  </View>
+              const act = activityByReport[r.id] ?? null; const actFromMe = act?.sender_id === user?.id; const statusInfo = reportStatusInfo(r, language); const isClosed = r.status === "CLOSED" || !!r.closed_at; const isExpired = r.status === "EXPIRED" || (!!r.visible_until && Date.parse(r.visible_until) <= Date.now()); const latestChatId = act?.match_id; const count = matchCountByReport[r.id] ?? 0;
+              return <View key={r.id} style={styles.card}>
+                <View style={styles.cardTopRow}><Text style={[styles.kindBadge, r.type === "FOUND" && styles.kindBadgeFound]}>{r.type === "LOST" ? (language === "en" ? "LOST" : "MISTET") : (language === "en" ? "FOUND" : "FUNNET")}</Text><Text style={[styles.statusBadge, isExpired && styles.statusExpired, isClosed && styles.statusClosed]}>{statusInfo.label}</Text></View>
+                <Text style={styles.title}>{prettyReportTitle(r, language).replace(/^Lost:\s*|^Found:\s*|^Mistet:\s*|^Funnet:\s*/i, "")}</Text>
+                <Text style={styles.meta}>{language === "en" ? "Reported" : "Registrert"} {new Date(r.created_at).toLocaleDateString()}</Text>
+                {r.type === "FOUND" && <Text style={styles.extensionInfo}>{language === "en" ? `Extended ${Number(r.extension_count || 0)} of 2 times` : `Forlenget ${Number(r.extension_count || 0)} av 2 ganger`}</Text>}
+                {act && <Text style={styles.lastLine} numberOfLines={2}>{language === "en" ? "Latest chat" : "Siste chat"}: {actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} · {formatTime(act.at)} · {shortMessage(act.body)}</Text>}
+                {unreadByReport[r.id] && <Text style={styles.unread}>● {language === "en" ? "New message" : "Ny melding"}</Text>}
+                <View style={styles.primaryActions}>
+                  {latestChatId && <Pressable style={styles.primaryBtn} onPress={() => router.push(`/chat/${latestChatId}`)}><Text style={styles.primaryBtnText}>{language === "en" ? "Open chat" : "Åpne chat"}</Text></Pressable>}
+                  {count > 0 ? <Pressable style={[styles.primaryBtn, latestChatId && styles.secondaryPrimary]} onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}><Text style={[styles.primaryBtnText, latestChatId && styles.secondaryPrimaryText]}>{language === "en" ? `View matches (${count})` : `Se treff (${count})`}</Text></Pressable> : <View style={styles.noMatches}><Text style={styles.noMatchesText}>{language === "en" ? "No matches yet" : "Ingen treff ennå"}</Text></View>}
                 </View>
-              );
+                <View style={styles.secondaryActions}>
+                  {r.type === "LOST" && !isClosed && <Pressable onPress={() => editReport(r)}><Text style={styles.secondaryLink}>{isExpired ? (language === "en" ? "Edit details" : "Rediger detaljer") : (language === "en" ? "Edit" : "Rediger")}</Text></Pressable>}
+                  {canExtendFound(r) && <Pressable onPress={() => confirmExtendFound(r)}><Text style={styles.extendLink}>{isExpired ? (language === "en" ? "Reactivate" : "Aktiver igjen") : (language === "en" ? "Extend" : "Forleng")}</Text></Pressable>}
+                  {!isClosed && !(r.type === "LOST" && isExpired) && <Pressable onPress={() => confirmClose(r)}><Text style={styles.secondaryLink}>{language === "en" ? "Close" : "Avslutt"}</Text></Pressable>}
+                  <Pressable onPress={() => confirmDelete(r)}><Text style={styles.deleteLink}>{language === "en" ? "Delete" : "Slett"}</Text></Pressable>
+                </View>
+              </View>;
             })}
-            <Pressable style={styles.reloadBtn} onPress={load}>
-              <Text style={styles.reloadTxt}>{language === "en" ? "Refresh" : "Oppdater"}</Text>
-            </Pressable>
+            <Pressable style={styles.reloadBtn} onPress={load}><Text style={styles.reloadTxt}>{language === "en" ? "Refresh" : "Oppdater"}</Text></Pressable>
           </ScrollView>
         )}
-      </View>
-      <Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}>
-        <View style={dialogStyles.backdrop}>
-          <View style={dialogStyles.card}>
-            <View style={dialogStyles.iconCircle}><Text style={dialogStyles.iconText}>{confirmDialog?.kind === "delete" ? "!" : confirmDialog?.kind === "close" ? "✓" : "+"}</Text></View>
-            <Text style={dialogStyles.title}>{dialogTitle}</Text>
-            <Text style={dialogStyles.body}>{dialogBody}</Text>
-            <View style={dialogStyles.actions}>
-              <Pressable style={dialogStyles.cancelBtn} onPress={() => setConfirmDialog(null)}><Text style={dialogStyles.cancelText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
-              <Pressable style={[dialogStyles.confirmBtn, confirmDialog?.kind === "delete" && dialogStyles.deleteConfirmBtn]} onPress={() => void runDialogAction()}><Text style={dialogStyles.confirmText}>{confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate" : "Aktiver") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case" : "Avslutt sak") : (language === "en" ? "Delete" : "Slett")}</Text></Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      </View><Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}><View style={dialogStyles.backdrop}><View style={dialogStyles.card}><View style={dialogStyles.iconCircle}><Text style={dialogStyles.iconText}>{confirmDialog?.kind === "delete" ? "!" : confirmDialog?.kind === "close" ? "✓" : "+"}</Text></View><Text style={dialogStyles.title}>{dialogTitle}</Text><Text style={dialogStyles.body}>{dialogBody}</Text><View style={dialogStyles.actions}><Pressable style={dialogStyles.cancelBtn} onPress={() => setConfirmDialog(null)}><Text style={dialogStyles.cancelText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable><Pressable style={[dialogStyles.confirmBtn, confirmDialog?.kind === "delete" && dialogStyles.deleteConfirmBtn]} onPress={() => void runDialogAction()}><Text style={dialogStyles.confirmText}>{confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate" : "Aktiver") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case" : "Avslutt sak") : (language === "en" ? "Delete" : "Slett")}</Text></Pressable></View></View></View></Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  muted: { color: theme.colors.muted, fontWeight: "600", textAlign: "center" },
-  list: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 30 },
-  card: { padding: 16, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, marginBottom: 14 },
-  cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  kindBadge: { overflow: "hidden", borderRadius: 999, backgroundColor: "#FFF1F2", color: "#BE123C", paddingHorizontal: 10, paddingVertical: 5, fontSize: 11, fontWeight: "900" },
-  kindBadgeFound: { backgroundColor: "#ECFDF3", color: "#15803D" },
-  statusBadge: { overflow: "hidden", borderRadius: 999, backgroundColor: "#EEF2FF", color: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11, fontWeight: "900" },
-  statusExpired: { backgroundColor: "#FFF7ED", color: "#B45309" },
-  statusClosed: { backgroundColor: "#F1F5F9", color: "#475569" },
-  title: { color: theme.colors.text, fontSize: 18, lineHeight: 23, fontWeight: "900" },
-  meta: { marginTop: 5, color: theme.colors.muted, fontSize: 13, fontWeight: "600" },
-  extensionInfo: { marginTop: 8, color: theme.colors.muted, fontSize: 12, fontWeight: "700" },
-  lastLine: { marginTop: 10, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "700" },
-  unread: { marginTop: 6, color: theme.colors.primary, fontWeight: "900", fontSize: 12 },
-  primaryActions: { flexDirection: "row", gap: 8, marginTop: 14 },
-  primaryBtn: { flex: 1, minHeight: 44, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primary, paddingHorizontal: 10 },
-  primaryBtnText: { color: "#FFFFFF", fontWeight: "900", fontSize: 13 },
-  secondaryPrimary: { backgroundColor: "#EEF2FF", borderWidth: 1, borderColor: "#C7D2FE" },
-  secondaryPrimaryText: { color: theme.colors.primary },
-  secondaryActions: { flexDirection: "row", flexWrap: "wrap", gap: 18, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#EEF2F6" },
-  secondaryLink: { color: "#475569", fontWeight: "800", fontSize: 13 },
-  extendLink: { color: "#15803D", fontWeight: "900", fontSize: 13 },
-  deleteLink: { color: "#B42318", fontWeight: "900", fontSize: 13 },
-  reloadBtn: { marginTop: 4, minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.card },
-  reloadTxt: { fontWeight: "800", color: theme.colors.text },
+  safe:{flex:1,backgroundColor:theme.colors.bg},center:{flex:1,alignItems:"center",justifyContent:"center",padding:24},muted:{color:theme.colors.muted,fontWeight:"600",textAlign:"center"},list:{paddingHorizontal:14,paddingTop:8,paddingBottom:30},card:{padding:16,borderRadius:20,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.card,marginBottom:14},cardTopRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:12},kindBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#FFF1F2",color:"#BE123C",paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},kindBadgeFound:{backgroundColor:"#ECFDF3",color:"#15803D"},statusBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#EEF2FF",color:theme.colors.primary,paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},statusExpired:{backgroundColor:"#FFF7ED",color:"#B45309"},statusClosed:{backgroundColor:"#F1F5F9",color:"#475569"},title:{color:theme.colors.text,fontSize:18,lineHeight:23,fontWeight:"900"},meta:{marginTop:5,color:theme.colors.muted,fontSize:13,fontWeight:"600"},extensionInfo:{marginTop:7,color:theme.colors.muted,fontSize:12,fontWeight:"700"},lastLine:{marginTop:9,color:theme.colors.text,fontSize:13,lineHeight:18,fontWeight:"700"},unread:{marginTop:6,color:theme.colors.primary,fontWeight:"900",fontSize:12},primaryActions:{flexDirection:"row",gap:8,marginTop:13},primaryBtn:{flex:1,minHeight:42,borderRadius:13,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary,paddingHorizontal:10},primaryBtnText:{color:"#FFF",fontWeight:"900",fontSize:13},secondaryPrimary:{backgroundColor:"#EEF2FF",borderWidth:1,borderColor:"#C7D2FE"},secondaryPrimaryText:{color:theme.colors.primary},noMatches:{alignSelf:"flex-start",minHeight:38,borderRadius:12,alignItems:"center",justifyContent:"center",paddingHorizontal:14,backgroundColor:"#F1F5F9",borderWidth:1,borderColor:"#E2E8F0"},noMatchesText:{color:theme.colors.muted,fontWeight:"800",fontSize:12},secondaryActions:{flexDirection:"row",flexWrap:"wrap",gap:18,marginTop:13,paddingTop:11,borderTopWidth:1,borderTopColor:"#EEF2F6"},secondaryLink:{color:"#475569",fontWeight:"800",fontSize:13},extendLink:{color:"#15803D",fontWeight:"900",fontSize:13},deleteLink:{color:"#B42318",fontWeight:"900",fontSize:13},reloadBtn:{marginTop:4,minHeight:44,borderRadius:14,borderWidth:1,borderColor:theme.colors.border,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.card},reloadTxt:{fontWeight:"800",color:theme.colors.text}
 });
-
-const dialogStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
-  card: { width: "100%", maxWidth: 410, borderRadius: 22, backgroundColor: "#FFFFFF", padding: 22, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 12 },
-  iconCircle: { width: 52, height: 52, borderRadius: 26, alignSelf: "center", alignItems: "center", justifyContent: "center", backgroundColor: "#EEF2FF" },
-  iconText: { color: theme.colors.primary, fontSize: 25, fontWeight: "900" },
-  title: { marginTop: 14, textAlign: "center", color: theme.colors.text, fontSize: 19, fontWeight: "900" },
-  body: { marginTop: 9, textAlign: "center", color: theme.colors.muted, fontSize: 14, lineHeight: 21, fontWeight: "600" },
-  actions: { flexDirection: "row", gap: 10, marginTop: 20 },
-  cancelBtn: { flex: 1, minHeight: 46, borderRadius: 13, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.colors.border },
-  cancelText: { color: theme.colors.text, fontWeight: "900" },
-  confirmBtn: { flex: 1, minHeight: 46, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primary },
-  deleteConfirmBtn: { backgroundColor: "#B42318" },
-  confirmText: { color: "#FFFFFF", fontWeight: "900" },
-});
+const dialogStyles=StyleSheet.create({backdrop:{flex:1,backgroundColor:"rgba(15,23,42,0.5)",alignItems:"center",justifyContent:"center",padding:24},card:{width:"100%",maxWidth:410,borderRadius:22,backgroundColor:"#FFF",padding:22,borderWidth:1,borderColor:"#E2E8F0",shadowColor:"#000",shadowOpacity:.18,shadowRadius:24,shadowOffset:{width:0,height:12},elevation:12},iconCircle:{width:52,height:52,borderRadius:26,alignSelf:"center",alignItems:"center",justifyContent:"center",backgroundColor:"#EEF2FF"},iconText:{color:theme.colors.primary,fontSize:25,fontWeight:"900"},title:{marginTop:14,textAlign:"center",color:theme.colors.text,fontSize:19,fontWeight:"900"},body:{marginTop:9,textAlign:"center",color:theme.colors.muted,fontSize:14,lineHeight:21,fontWeight:"600"},actions:{flexDirection:"row",gap:10,marginTop:20},cancelBtn:{flex:1,minHeight:46,borderRadius:13,alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:theme.colors.border},cancelText:{color:theme.colors.text,fontWeight:"900"},confirmBtn:{flex:1,minHeight:46,borderRadius:13,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary},deleteConfirmBtn:{backgroundColor:"#B42318"},confirmText:{color:"#FFF",fontWeight:"900"}});

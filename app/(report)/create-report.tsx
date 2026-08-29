@@ -402,6 +402,10 @@ export default function CreateReportScreen() {
   const [validationOpen, setValidationOpen] = useState(false);
   const [objectSectionY, setObjectSectionY] = useState(0);
   const [timeSectionY, setTimeSectionY] = useState(0);
+  const [detailsSectionY, setDetailsSectionY] = useState(0);
+  const [imagesSectionY, setImagesSectionY] = useState(0);
+  const [continueWithoutImage, setContinueWithoutImage] = useState(false);
+  const [photoPromptOpen, setPhotoPromptOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);  
   const [catOpen, setCatOpen] = useState(false);  
   const [colorOpen, setColorOpen] = useState(false);  
@@ -436,7 +440,8 @@ export default function CreateReportScreen() {
     setField("location" as any, {  
       latitude: loc?.latitude ?? latitude,  
       longitude: loc?.longitude ?? longitude,  
-      radiusMeters: 10,  
+      radiusMeters: 10,
+      confirmed: loc?.confirmed === true,
     });  
   }, [type]);  
   const category = (draft as any).category ?? "PERSONAL";  
@@ -712,17 +717,27 @@ const subcategoryLabel = useMemo(() => {
     ].filter(Boolean);  
     return parts.join(" • ");  
   }, [type, categoryLabel, subcategoryKey, subcategoryLabel, subcategoryCustom, category, brand, colorLabel, colorSecondary, color2Label, language]);  
+  const validationKey = {
+    item: language === "en" ? "Item" : "Gjenstand",
+    color: language === "en" ? "Primary color" : "Hovedfarge",
+    time: language === "en" ? "Date and time" : "Dato og tidspunkt",
+    location: language === "en" ? "Confirmed location" : "Bekreftet sted",
+  };
   const validate = () => {
     const missing: string[] = [];
     let firstY = 0;
-    if (!subcategoryKey) { missing.push(language === "en" ? "Item" : "Gjenstand"); firstY = objectSectionY; }
+    if (!subcategoryKey) { missing.push(validationKey.item); firstY = objectSectionY; }
     if (category === "PETS" && subcategoryKey === "CUSTOM" && !subcategoryCustom.trim()) { missing.push(language === "en" ? "Type of pet" : "Type husdyr"); firstY = firstY || objectSectionY; }
+    if (!color) { missing.push(validationKey.color); firstY = firstY || detailsSectionY; }
     const iso = toISO(dateStr.trim(), timeStr.trim());
-    if (!iso) { missing.push(language === "en" ? "Date and time" : "Dato og tidspunkt"); firstY = firstY || timeSectionY; }
-    if (!locationLabel.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude)) { missing.push(language === "en" ? "Location" : "Sted"); firstY = firstY || timeSectionY; }
+    if (!iso) { missing.push(validationKey.time); firstY = firstY || timeSectionY; }
+    const locationConfirmed = (draft as any).location?.confirmed === true;
+    if (!locationConfirmed || !locationLabel.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      missing.push(validationKey.location); firstY = firstY || timeSectionY;
+    }
     if (type === "LOST" && rewardEnabled) {
       const n = Number(rewardNOK || "0");
-      if (!Number.isFinite(n) || n < 0) { missing.push(language === "en" ? "Valid reward amount" : "Gyldig finnerlønn"); }
+      if (!Number.isFinite(n) || n < 0) missing.push(language === "en" ? "Valid reward amount" : "Gyldig finnerlønn");
     }
     if (missing.length) {
       setValidationMissing(missing);
@@ -734,10 +749,14 @@ const subcategoryLabel = useMemo(() => {
     if (iso) setField("occurredAtISO" as any, iso);
     return true;
   };
+
   const addFromGallery = async () => {  
     try {  
       const uri = await pickOneImage();  
-      if (uri) setPendingImages((prev) => [uri, ...prev]);  
+      if (uri) {
+        setPendingImages((prev) => [uri, ...prev]);
+        setContinueWithoutImage(false);
+      }  
     } catch (e: any) {  
       Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open image library." : "Kunne ikke åpne bildebiblioteket."));  
     }  
@@ -745,7 +764,10 @@ const subcategoryLabel = useMemo(() => {
   const addFromCamera = async () => {  
     try {  
       const uri = await captureOneImage();  
-      if (uri) setPendingImages((prev) => [uri, ...prev]);  
+      if (uri) {
+        setPendingImages((prev) => [uri, ...prev]);
+        setContinueWithoutImage(false);
+      }  
     } catch (e: any) {  
       Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open camera." : "Kunne ikke åpne kamera."));  
     }  
@@ -762,7 +784,12 @@ const subcategoryLabel = useMemo(() => {
   const onSubmit = useCallback(async (options?: { testOverrideWeeklyLimit?: boolean }) => {  
     console.log("[create-report] CTA pressed");  
     const log = (...args: any[]) => console.log("[create-report]", ...args);  
-    if (!validate()) return;  
+    if (!validate()) return;
+    if (!isEditMode && pendingImages.length === 0 && !continueWithoutImage) {
+      setPhotoPromptOpen(true);
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true }));
+      return;
+    }  
     // --- Progressive auth ved innsending ---  
     // FOUND: lav friksjon -> bruk session hvis finnes, ellers anonymous sign-in.  
     // LOST: krever ekte konto (ikke anonymous). Hvis ikke innlogget, send til login-skjerm.  
@@ -1076,7 +1103,7 @@ const subcategoryLabel = useMemo(() => {
               </Pressable>  
             </View>  
             {/* CARD: Objekt */}
-            <View style={styles.card}>
+            <View onLayout={(e) => setObjectSectionY(e.nativeEvent.layout.y)} style={styles.card}>
               <Text style={styles.h2}>{whatLabel}</Text>
               <Text style={styles.caption}>{language === "en" ? "Item" : "Gjenstand"}</Text>
               <Text style={styles.muted}>{language === "en" ? "Type what was lost or found. For example: wedding ring, keys, sunglasses, dog." : "Skriv hva du har mistet eller funnet. For eksempel: giftering, nøkler, solbriller, hund."}</Text>
@@ -1146,14 +1173,14 @@ const subcategoryLabel = useMemo(() => {
                 </>
               )}
             </View>
-            {/* CARD: Detaljer */}  
-            <View style={[styles.card, (colorOpen || color2Open) && styles.cardOnTop]}>  
+            {/* CARD: Detaljer */}
+            <View onLayout={(e) => setDetailsSectionY(e.nativeEvent.layout.y)} style={[styles.card, (colorOpen || color2Open) && styles.cardOnTop, validationMissing.includes(validationKey.color) && styles.cardError]}>  
               <Text style={styles.h2}>{language === "en" ? "Details" : "Detaljer"}</Text>  
               <View style={[styles.row, { marginTop: theme.space.md, alignItems: "flex-start" }]}>  
                 <View style={{ flex: 1 }}>  
-                  <Text style={styles.caption}>{language === "en" ? "Primary color (optional)" : "Hovedfarge (valgfritt)"}</Text>  
+                  <Text style={styles.caption}>{language === "en" ? "Primary color" : "Hovedfarge"}</Text>  
                   <Pressable  
-                    style={styles.selectBtn}  
+                    style={[styles.selectBtn, validationMissing.includes(validationKey.color) && styles.inputError]}  
                     onPress={() => {  
                       setColorOpen((v) => !v);  
                       setCatOpen(false);  
@@ -1195,6 +1222,7 @@ const subcategoryLabel = useMemo(() => {
                     </View>  
                   )}  
 {/* removed stray token */}  
+                  {validationMissing.includes(validationKey.color) && <Text style={styles.errorText}>{language === "en" ? "Choose a primary color." : "Velg en hovedfarge."}</Text>}
                   <Text style={[styles.caption, { marginTop: theme.space.md }]}>{language === "en" ? "Secondary color (optional)" : "Tilleggsfarge (valgfritt)"}</Text>  
                   <Pressable  
                     style={styles.selectBtn}  
@@ -1276,8 +1304,8 @@ const subcategoryLabel = useMemo(() => {
                 multiline
               />
             </View>
-            {/* CARD: Tid & sted */}  
-            <View style={styles.card}>  
+            {/* CARD: Tid & sted */}
+            <View onLayout={(e) => setTimeSectionY(e.nativeEvent.layout.y)} style={[styles.card, validationMissing.includes(validationKey.time) && styles.cardError, validationMissing.includes(validationKey.location) && styles.cardError]}>  
               <Text style={styles.h2}>{language === "en" ? "Time & place" : "Tid & sted"}</Text>  
               <Text style={styles.muted}>{language === "en" ? `Radius: ${type === "FOUND" ? `${radiusLabel} (precise)` : radiusLabel}` : `Radius: ${type === "FOUND" ? `${radiusLabel} (nøyaktig)` : radiusLabel}`}</Text>  
               <Text style={styles.caption}>{type === "LOST" ? (language === "en" ? "Estimated time lost" : "Antatt tidspunkt mistet") : (language === "en" ? "Time (if known)" : "Tidspunkt (hvis kjent)")}</Text>  
@@ -1313,7 +1341,8 @@ const subcategoryLabel = useMemo(() => {
               </View>  
               <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Position" : "Posisjon"}</Text>  
               <Text style={styles.muted}>{language === "en" ? "Choose the place on the map or enter an address / place description." : "Velg sted på kart eller skriv inn adresse / stedsbeskrivelse."}</Text>    
-              <Pressable style={styles.mapPreviewWrap} onPress={openMap}>  
+              <Text style={[(draft as any).location?.confirmed === true ? styles.confirmedText : styles.unconfirmedText]}>{(draft as any).location?.confirmed === true ? (language === "en" ? "✓ Location confirmed" : "✓ Sted bekreftet") : (language === "en" ? "Location must be confirmed on the map" : "Stedet må bekreftes på kartet")}</Text>
+              <Pressable style={[styles.mapPreviewWrap, validationMissing.includes(validationKey.location) && styles.inputError]} onPress={openMap}>  
                 <View pointerEvents="none" style={styles.mapPreviewInner}>  
                   <MapView  
                     provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}  
@@ -1396,8 +1425,8 @@ const subcategoryLabel = useMemo(() => {
                 </Text>  
               </Pressable>  
             )}  
-            {/* Bilder */}  
-            <View style={styles.card}>  
+            {/* Bilder */}
+            <View onLayout={(e) => setImagesSectionY(e.nativeEvent.layout.y)} style={styles.card}>  
               <Text style={styles.h2}>{language === "en" ? "Images" : "Bilder"}</Text>  
               <View style={[styles.row, { marginTop: theme.space.md }]}>  
                 <Pressable style={styles.primaryBtn} onPress={addFromGallery}>  
@@ -1451,6 +1480,17 @@ const subcategoryLabel = useMemo(() => {
        <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => setValidationOpen(false)}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Go to first missing field" : "Gå til første manglende felt"}</Text></Pressable>
      </View>
    </View>
+ </Modal>
+ <Modal visible={photoPromptOpen} transparent animationType="fade" onRequestClose={() => setPhotoPromptOpen(false)}>
+   <View style={modalStyles.backdrop}><View style={modalStyles.card}>
+     <View style={[modalStyles.icon, { backgroundColor: "#EEF2FF" }]}><Text style={[modalStyles.iconTxt, { color: theme.colors.primary }]}>+</Text></View>
+     <Text style={modalStyles.title}>{language === "en" ? "Continue without a photo?" : "Fortsette uten bilde?"}</Text>
+     <Text style={modalStyles.body}>{language === "en" ? "A photo can make the item easier to identify and improve possible matches." : "Et bilde kan gjøre gjenstanden enklere å identifisere og forbedre mulige treff."}</Text>
+     <View style={modalStyles.actions}>
+       <Pressable style={[modalStyles.btn, modalStyles.btnOutline]} onPress={() => { setPhotoPromptOpen(false); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true })); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Add photo" : "Legg til bilde"}</Text></Pressable>
+       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current(); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Continue" : "Fortsett"}</Text></Pressable>
+     </View>
+   </View></View>
  </Modal>
  {/* Lagret-modal (proff) */}  
  <Modal  
@@ -1560,8 +1600,11 @@ const styles = StyleSheet.create({
     ...theme.shadow.card,  
   },  
   // Løft kortet over andre når dropdown er åpen (hindrer at meny skjules bak andre cards)  
-  cardError: { borderColor: "#F59E0B", borderWidth: 1.5 },
   inputError: { borderColor: theme.colors.danger, borderWidth: 1.5, backgroundColor: "#FFF7F7" },
+  cardError: { borderColor: theme.colors.danger, borderWidth: 1.5 },
+  errorText: { marginTop: 7, color: theme.colors.danger, fontWeight: "800", fontSize: 12 },
+  confirmedText: { marginTop: 9, color: "#15803D", fontWeight: "800", fontSize: 12 },
+  unconfirmedText: { marginTop: 9, color: "#B45309", fontWeight: "800", fontSize: 12 },
   missingList: { marginTop: 14, backgroundColor: "#FFF7ED", borderRadius: 12, padding: 12 },
   missingItem: { color: "#9A3412", fontWeight: "800", marginVertical: 2 },
   cardOnTop: {  

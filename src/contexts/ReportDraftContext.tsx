@@ -10,6 +10,8 @@ export type ReportLocation = {
   address?: string;
   /** Valgt radius i meter (valgfritt). */
   radiusMeters?: number;
+  /** True only after the user has actively confirmed the map selection. */
+  confirmed?: boolean;
 };
 
 export type ReportDraft = {

@@ -325,7 +325,7 @@ function timeAgoLong(iso?: string | null, language: AppLang = "no") {
   return String(years) + " år siden";
 }    
 type SimilarityTone = "green" | "yellow" | "orange" | "red" | "neutral";    
-type SimilarityRow = { label: string; value: string; tone: SimilarityTone };    
+type SimilarityRow = { label: string; value: string; tone: SimilarityTone; note?: string | null };    
 function latestReportIso(m: Match) {    
   const candidates = [m.lost?.created_at, m.found?.created_at]    
     .map((iso) => ({ iso, t: Date.parse(String(iso ?? "")) }))    
@@ -341,6 +341,18 @@ function primarySubcategory(m: Match, language: AppLang = "no") {
     || subcategoryLabel(m.found?.category, m.found?.subcategory_key, language)
     || null;
 }    
+function objectComparison(m: Match, language: AppLang = "no") {
+  const lost = subcategoryLabel(m.lost?.category, m.lost?.subcategory_key, language);
+  const found = subcategoryLabel(m.found?.category, m.found?.subcategory_key, language);
+  const level = Number(reasonVal(m.reasons, "object_match_level"));
+  const same = !!lost && !!found && normalizeText(lost) === normalizeText(found);
+  const value = lost && found ? (same ? lost : `${lost} ↔ ${found}`) : (lost || found || "");
+  const note = same || !lost || !found ? null : level >= 2
+    ? (language === "en" ? "Related items" : "Beslektede gjenstander")
+    : (language === "en" ? "Possibly related items" : "Mulig beslektede gjenstander");
+  return { lost, found, level, same, value, note };
+}
+
 function primaryColor(m: Match, language: AppLang = "no") {
   return colorLabel(m.lost?.color, language) || colorLabel(m.found?.color, language) || null;
 }    
@@ -355,15 +367,12 @@ function headlineTitle(m: Match, language: AppLang = "no") {
   return reportCore(m.lost, language) || reportCore(m.found, language) || (language === "en" ? "Unknown item" : "Ukjent gjenstand");
 }    
 function objectTone(m: Match, language: AppLang = "no"): SimilarityTone {
-  const lostSub = normalizeText(subcategoryLabel(m.lost?.category, m.lost?.subcategory_key, language));
-  const foundSub = normalizeText(subcategoryLabel(m.found?.category, m.found?.subcategory_key, language));
-  const lostCat = normalizeText(m.lost?.category);
-  const foundCat = normalizeText(m.found?.category);
-  if (lostSub && foundSub && lostSub === foundSub) return "green";
-  if (lostCat && foundCat && lostCat === foundCat) return "yellow";
-  if (lostSub || foundSub) return "orange";
-  return "neutral";
-}    
+  const comparison = objectComparison(m, language);
+  if (comparison.same || comparison.level >= 3) return "green";
+  if (comparison.level === 2) return "yellow";
+  if (comparison.level === 1) return "orange";
+  return comparison.lost || comparison.found ? "red" : "neutral";
+}
 function colorTone(m: Match, language: AppLang = "no"): SimilarityTone {
   const lostColor = normalizeText(colorLabel(m.lost?.color, language));
   const foundColor = normalizeText(colorLabel(m.found?.color, language));
@@ -407,11 +416,11 @@ function detailRowsForMatch(m: Match, reportId?: string, language: AppLang = "no
   const rows: SimilarityRow[] = [];
   const areaInfo = areaRelationForMatch(m, language);
   const daysApart = reasonVal(m.reasons, "days_apart");
-  const objectLabel = primarySubcategory(m, language);
+  const object = objectComparison(m, language);
   const color = primaryColor(m, language);
   const seenAgo = timeAgoLong(counterpart?.occurred_at || counterpart?.created_at || null, language);
   const updatedAgo = timeAgoLong(latestReportIso(m), language);
-  if (objectLabel) rows.push({ label: language === "en" ? "Item" : "Gjenstand", value: String(objectLabel), tone: objectTone(m, language) });
+  if (object.value) rows.push({ label: language === "en" ? "Item" : "Gjenstand", value: object.value, tone: objectTone(m, language), note: object.note });
   if (color) rows.push({ label: language === "en" ? "Color" : "Farge", value: String(color), tone: colorTone(m, language) });
   rows.push(areaInfo);
   if (seenAgo) rows.push({ label: language === "en" ? "Last seen" : "Sist sett", value: seenAgo, tone: daysTone(daysApart) });
@@ -819,8 +828,10 @@ export default function MatchScreen() {
                         <Text style={[styles.reasonIcon, { color: accent.color }]}>{accent.icon}</Text>    
                         <Text style={styles.reasonTxt}>    
                           <Text style={styles.reasonLabel}>{row.label}: </Text>    
-                          {row.value}    
-                        </Text>    
+                          {row.value}
+                          {!!row.note && <Text style={styles.reasonNote}>{`
+${row.note}`}</Text>}
+                        </Text>
                       </View>    
                     );    
                   })}    
@@ -892,7 +903,8 @@ const styles = StyleSheet.create({
   reasonRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },    
   reasonIcon: { fontWeight: "900", width: 16, marginTop: 1 },    
   reasonTxt: { color: theme.colors.text, fontWeight: "700", flex: 1 },    
-  reasonLabel: { color: theme.colors.text, fontWeight: "900" },    
+  reasonLabel: { color: theme.colors.text, fontWeight: "900" },
+  reasonNote: { color: theme.colors.muted, fontWeight: "700", fontSize: 12 },    
   actionsRow: { flexDirection: "row", gap: 10, marginTop: 12 },    
   actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", justifyContent: "center" },    
   actionBtnGhost: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },    

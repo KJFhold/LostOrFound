@@ -294,6 +294,18 @@ function prettyHeading(rep: any, language: AppLang = "no") {
   const tail = brand ? " (" + brand + ")" : "";
   return typ + ": " + core + tail;
 }  
+function objectComparison(match: MatchFull, language: AppLang = "no") {
+  const lost = subcategoryLabel(match.lost?.category, match.lost?.subcategory_key, language);
+  const found = subcategoryLabel(match.found?.category, match.found?.subcategory_key, language);
+  const level = Number(reasonVal(match.reasons, "object_match_level"));
+  const same = !!lost && !!found && lost.toLowerCase() === found.toLowerCase();
+  const value = lost && found ? (same ? lost : `${lost} ↔ ${found}`) : (lost || found || "");
+  const note = same || !lost || !found ? null : level >= 2
+    ? (language === "en" ? "Related items" : "Beslektede gjenstander")
+    : (language === "en" ? "Possibly related items" : "Mulig beslektede gjenstander");
+  return { level, same, value, note };
+}
+
 function reportRadiusMeters(rep?: ReportFull | null) {  
   const candidates = [  
     rep?.radius_m,  
@@ -569,7 +581,8 @@ export default function MatchDetailsScreen() {
   }    
   const level = (match.score >= 85 ? 4 : match.score >= 70 ? 3 : match.score >= 55 ? 2 : 1);  
   const hiddenLow = level < 2;  
-const areaSummary = areaSummaryForMatch(match, language);  
+const areaSummary = areaSummaryForMatch(match, language);
+  const objectCompare = objectComparison(match, language);  
   const counterpartSeen = timeAgoLong(match.found?.occurred_at || match.found?.created_at || match.lost?.occurred_at || match.lost?.created_at, language);  
   const latestReportAt = [match.lost?.created_at, match.found?.created_at]  
     .map((iso) => ({ iso, t: Date.parse(String(iso ?? "")) }))  
@@ -670,7 +683,14 @@ const areaSummary = areaSummaryForMatch(match, language);
             </Text>  
             {unread && <Text style={styles.unreadDot}>●</Text>}  
           </View>  
-          <Text style={styles.headerBlurb}>{language === "en" ? "The details match well and appear to describe the same item." : "Opplysningene stemmer godt overens og ser ut til å beskrive samme gjenstand."}</Text>  
+          <Text style={styles.headerBlurb}>{objectCompare.same
+            ? (language === "en" ? "The reported item type is the same in both cases." : "Gjenstandstypen er lik i begge rapportene.")
+            : (language === "en" ? "The item descriptions differ, but the items are related and other details support the match." : "Gjenstandsbeskrivelsene er ulike, men gjenstandene er beslektet og andre opplysninger støtter treffet.")}</Text>
+          {!!objectCompare.value && <View style={styles.compareBox}>
+            <Text style={styles.compareLabel}>{language === "en" ? "Item comparison" : "Sammenligning av gjenstand"}</Text>
+            <Text style={styles.compareValue}>{objectCompare.value}</Text>
+            {!!objectCompare.note && <Text style={styles.compareNote}>{objectCompare.note}</Text>}
+          </View>}  
           <View style={styles.metaRow}>  
             {!!areaSummary && <Text style={styles.badge}>{language === "en" ? "Location" : "Sted"}: {areaSummary}</Text>}  
             {!!counterpartSeen && <Text style={styles.badge}>{language === "en" ? "Last seen" : "Sist sett"}: {counterpartSeen}</Text>}  
@@ -793,7 +813,11 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },  
   hTitle: { fontWeight: "900", fontSize: 16, flex: 1, paddingRight: 8 },  
   unreadDot: { color: "#2563EB", fontWeight: "900" },  
-  headerBlurb: { marginTop: 8, color: "#334155", fontWeight: "700", lineHeight: 20 },  
+  headerBlurb: { marginTop: 8, color: "#334155", fontWeight: "700", lineHeight: 20 },
+  compareBox: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" },
+  compareLabel: { color: "#9A3412", fontWeight: "900", fontSize: 12, textTransform: "uppercase" },
+  compareValue: { marginTop: 4, color: "#111827", fontWeight: "900", fontSize: 16 },
+  compareNote: { marginTop: 3, color: "#9A3412", fontWeight: "700", fontSize: 12 },  
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },  
   badge: {  
     paddingHorizontal: 8,  

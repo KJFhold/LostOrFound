@@ -36,7 +36,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_API_KEY_IF_BUILDING_ANDROID"
+          "apiKey": "AIzaSyAAqPdJr3ISHOXc1d7jXLwZJ1N4acot7FM"
         }
       }
     },
@@ -52,11 +52,17 @@
             ]
           }
         ],
-        "NSLocationWhenInUseUsageDescription": "Vi bruker posisjonen din for å vise treff i nærheten på kartet.",
+        "NSLocationWhenInUseUsageDescription": "Lost or Found bruker posisjonen din for å hjelpe deg å registrere hvor noe ble mistet eller funnet.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Lost or Found bruker posisjonen din for å hjelpe deg å registrere hvor noe ble mistet eller funnet."
+        }
+      ],
       [
         "@stripe/stripe-react-native",
         {
@@ -66,7 +72,15 @@
       ],
       "expo-localization",
       "expo-font",
-      "react-native-localize"
+      "react-native-localize",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "lost-or-found-app",
+          "organization": "lost-or-found"
+        }
+      ]
     ]
   }
 }

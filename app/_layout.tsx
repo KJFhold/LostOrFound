@@ -5,6 +5,9 @@ import { Pressable, Text } from "react-native";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
 import { ReportDraftProvider } from "../src/contexts/ReportDraftContext";
+import { initializeSentry, Sentry } from "../src/lib/sentry";
+
+initializeSentry();
 
 function HeaderRight() {
   const router = useRouter();
@@ -41,7 +44,7 @@ function HeaderRight() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <I18nProvider>
       <AuthProvider>
@@ -67,3 +70,5 @@ export default function RootLayout() {
     </I18nProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

@@ -1,6 +1,6 @@
 // app/(tabs)/profile.tsx
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,6 +8,7 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { useI18n } from "../../src/i18n/I18nProvider";
 import { isAnonymousUser } from "../../src/lib/authGate";
 import { theme } from "../../src/ui/theme";
+import { Sentry } from "../../src/lib/sentry";
 
 export default function ProfileTab() {
   const router = useRouter();
@@ -100,6 +101,21 @@ export default function ProfileTab() {
           ))}
         </View>
 
+        {process.env.EXPO_PUBLIC_APP_ENV !== "production" && (
+          <Pressable
+            style={styles.sentryTest}
+            onPress={() => {
+              Sentry.captureException(new Error("LostOrFound controlled Sentry test"));
+              Alert.alert(
+                "Sentry-test sendt",
+                "En kontrollert testfeil er sendt. Appen og brukerdata er ikke endret."
+              );
+            }}
+          >
+            <Ionicons name="bug-outline" size={20} color="#92400E" />
+            <Text style={styles.sentryTestText}>Test feilrapportering</Text>
+          </Pressable>
+        )}
         {user ? (
           <Pressable style={styles.logout} onPress={logout}>
             <Text style={styles.logoutText}>{t("profile.logout")}</Text>
@@ -197,6 +213,23 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: "#fff",
+    fontWeight: "900",
+  },
+  sentryTest: {
+    marginTop: 20,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    backgroundColor: "#FFFBEB",
+  },
+  sentryTestText: {
+    color: "#92400E",
     fontWeight: "900",
   },
   logout: {

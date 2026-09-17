@@ -299,6 +299,7 @@ router.post("/", requireUser, async (req, res) => {
       area_radius_m = null,
       location_radius_m = null,
       test_override_weekly_limit = false,
+      client_request_id = null,
     } = req.body || {};
 
     if (!type || !category || !title || !occurred_at) {
@@ -312,6 +313,14 @@ router.post("/", requireUser, async (req, res) => {
       return res.status(400).json({ error: "Invalid report type" });
     }
 
+    const normalizedClientRequestId = typeof client_request_id === "string" ? client_request_id.trim() : "";
+    if (!normalizedClientRequestId || normalizedClientRequestId.length < 12 || normalizedClientRequestId.length > 100) {
+      return res.status(400).json({ error: "CLIENT_REQUEST_ID_REQUIRED" });
+    }
+    const { data: existingRequest, error: existingRequestError } = await supaAdmin
+      .from("reports").select("*").eq("user_id", user.id).eq("client_request_id", normalizedClientRequestId).maybeSingle();
+    if (existingRequestError) return res.status(400).json({ error: existingRequestError.message });
+    if (existingRequest) return res.json({ report: existingRequest, candidates: [], idempotent_replay: true });
     if (normalizedType === "LOST" && isAnonymousUser(user)) {
       return res.status(403).json({
         error: "ACCOUNT_REQUIRED_FOR_LOST",
@@ -345,6 +354,7 @@ router.post("/", requireUser, async (req, res) => {
 
     const insertPayload = {
       user_id: user.id,
+      client_request_id: normalizedClientRequestId,
       type: normalizedType,
       status: "ACTIVE",
       visible_until: visibleUntilForType(normalizedType),
@@ -372,7 +382,13 @@ router.post("/", requireUser, async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      if (error.code === "23505") {
+        const { data: replay } = await supaAdmin.from("reports").select("*").eq("user_id", user.id).eq("client_request_id", normalizedClientRequestId).maybeSingle();
+        if (replay) return res.json({ report: replay, candidates: [], idempotent_replay: true });
+      }
+      return res.status(400).json({ error: error.message });
+    }
 
     try {
       await recordReportCreation(data, user.id);
@@ -419,6 +435,7 @@ router.get("/mine", requireUser, async (req, res) => {
         "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, radius_m, search_radius_m, area_radius_m, location_radius_m, status, visible_until, closed_at, archived_at, last_extended_at, extension_count, critical_edit_count, last_critical_edit_at, edit_locked_until"
       )
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(400).json({ error: error.message });
@@ -447,6 +464,7 @@ router.patch("/:id", requireUser, async (req, res) => {
       .select("*")
       .eq("id", reportId)
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (rErr) return res.status(400).json({ error: rErr.message });
@@ -579,6 +597,7 @@ router.post("/:id/extend-found", requireUser, async (req, res) => {
       .select("*")
       .eq("id", reportId)
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (rErr) return res.status(400).json({ error: rErr.message });
@@ -655,6 +674,7 @@ router.post("/:id/close", requireUser, async (req, res) => {
       .select("*")
       .eq("id", reportId)
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (rErr) return res.status(400).json({ error: rErr.message });
@@ -705,112 +725,65 @@ router.delete("/:id", requireUser, async (req, res) => {
   try {
     const user = req.user;
     const reportId = req.params.id;
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : "USER_REQUEST";
 
-    const { data: report, error: rErr } = await supaAdmin
+    const { data: existing, error: rErr } = await supaAdmin
       .from("reports")
-      .select("id")
+      .select("*")
       .eq("id", reportId)
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (rErr) return res.status(400).json({ error: rErr.message });
-    if (!report) return res.status(404).json({ error: "Report not found" });
+    if (!existing) return res.status(404).json({ error: "Report not found" });
 
-    const { data: imgs, error: iErr } = await supaAdmin
-      .from("report_images")
-      .select("path")
-      .eq("report_id", reportId);
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const retentionUntil = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (iErr) return res.status(400).json({ error: iErr.message });
-
-    const { data: matches, error: mErr } = await supaAdmin
-      .from("matches")
-      .select("id")
-      .or(`lost_id.eq.${reportId},found_id.eq.${reportId}`);
-
-    if (mErr) return res.status(400).json({ error: mErr.message });
-
-    const matchIds = (matches || []).map((m) => m.id).filter(Boolean);
-    const cleanupResults = [];
-
-    // Delete notifications pointing directly to this report.
-    await safeDelete(
-      supaAdmin.from("notifications").delete().eq("entity_type", "report").eq("entity_id", reportId),
-      "notifications:report",
-      cleanupResults
-    );
-
-    // Delete notifications and related rows pointing to matches/conversations for this report.
-    if (matchIds.length > 0) {
-      await safeDelete(
-        supaAdmin.from("notifications").delete().in("entity_id", matchIds),
-        "notifications:matches_or_chat",
-        cleanupResults
-      );
-      await safeDelete(
-        supaAdmin.from("payments").delete().in("match_id", matchIds),
-        "payments",
-        cleanupResults
-      );
-      await safeDelete(
-        supaAdmin.from("messages").delete().in("conversation_id", matchIds),
-        "messages",
-        cleanupResults
-      );
-      await safeDelete(
-        supaAdmin.from("conversations").delete().in("id", matchIds),
-        "conversations",
-        cleanupResults
-      );
-      await safeDelete(
-        supaAdmin.from("matches").delete().in("id", matchIds),
-        "matches",
-        cleanupResults
-      );
-    }
-
-    const paths = (imgs || []).map((x) => x.path).filter(Boolean);
-
-    await safeDelete(
-      supaAdmin.from("report_images").delete().eq("report_id", reportId),
-      "report_images",
-      cleanupResults
-    );
-
-    const { error: dErr } = await supaAdmin
+    const { data: deleted, error: dErr } = await supaAdmin
       .from("reports")
-      .delete()
+      .update({
+        pre_delete_status: existing.status || null,
+        status: "CLOSED",
+        closed_at: existing.closed_at || nowIso,
+        deleted_at: nowIso,
+        deleted_by: user.id,
+        deletion_reason: reason || "USER_REQUEST",
+        retention_until: retentionUntil,
+      })
       .eq("id", reportId)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .select("id, deleted_at, retention_until")
+      .single();
 
-    if (dErr) return res.status(400).json({ error: dErr.message, cleanupResults });
+    if (dErr) return res.status(400).json({ error: dErr.message });
 
-    const byBucket = new Map();
-    for (const p of paths) {
-      const [bucket, ...rest] = String(p).split("/");
-      const objectPath = rest.join("/");
-      if (!bucket || !objectPath) continue;
-      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
-      byBucket.get(bucket).push(objectPath);
-    }
-
-    const storageCleanup = [];
-    for (const [bucket, objectPaths] of byBucket.entries()) {
-      try {
-        const { error: sErr } = await supaAdmin.storage.from(bucket).remove(objectPaths);
-        if (sErr) storageCleanup.push({ bucket, ok: false, error: sErr.message });
-        else storageCleanup.push({ bucket, ok: true, count: objectPaths.length });
-      } catch (e) {
-        storageCleanup.push({ bucket, ok: false, error: String(e?.message ?? e) });
-      }
+    // Best-effort immutable audit entry. The report, images, matches and chat are preserved
+    // during the security retention period and are unavailable to normal users.
+    try {
+      await supaAdmin.from("report_retention_events").insert({
+        report_id: reportId,
+        user_id: user.id,
+        event_type: "SOFT_DELETED",
+        reason: reason || "USER_REQUEST",
+        metadata: {
+          previous_status: existing.status || null,
+          retention_until: retentionUntil,
+        },
+      });
+    } catch (auditErr) {
+      console.warn("[reports] report_retention_events insert failed", auditErr?.message ?? auditErr);
     }
 
     return res.json({
       ok: true,
       deleted: reportId,
-      matchCleanupCount: matchIds.length,
-      cleanupResults,
-      storageCleanup,
+      soft_deleted: true,
+      deleted_at: deleted.deleted_at,
+      retention_until: deleted.retention_until,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
@@ -830,6 +803,7 @@ router.get("/:id", requireUser, async (req, res) => {
       .select("*")
       .eq("id", reportId)
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .single();
 
     if (rErr || !report) return res.status(404).json({ error: "Report not found" });

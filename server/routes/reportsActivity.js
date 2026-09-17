@@ -29,7 +29,7 @@ if (!supaAdmin || typeof supaAdmin.from !== "function") {
 function isActiveReport(rep) {
   if (!rep) return false;
   if (rep.status && rep.status !== "ACTIVE") return false;
-  if (rep.closed_at || rep.archived_at) return false;
+  if (rep.closed_at || rep.archived_at || rep.deleted_at) return false;
   if (rep.visible_until && Date.parse(rep.visible_until) <= Date.now()) return false;
   return true;
 }
@@ -42,9 +42,10 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     const { data: reports, error: rErr } = await supaAdmin
       .from("reports")
       .select(
-        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, status, visible_until, closed_at, archived_at, last_extended_at, extension_count"
+        "id, type, category, subcategory_key, title, created_at, occurred_at, color, brand, lat, lng, location_label, status, visible_until, closed_at, archived_at, last_extended_at, extension_count, deleted_at"
       )
       .eq("user_id", user.id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (rErr) return res.status(400).json({ error: rErr.message });
@@ -60,13 +61,13 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     // 2) Hent alle matcher for disse rapportene (2 queries, så merge)
     const { data: lostMatches, error: lmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at)")
+      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
       .in("lost_id", reportIds);
     if (lmErr) return res.status(400).json({ error: lmErr.message });
 
     const { data: foundMatches, error: fmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at)")
+      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
       .in("found_id", reportIds);
     if (fmErr) return res.status(400).json({ error: fmErr.message });
 

@@ -41,6 +41,7 @@ async function userOwnsReport(reportId, userId) {
     .select("id")
     .eq("id", reportId)
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) throw error;

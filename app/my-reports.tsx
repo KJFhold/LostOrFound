@@ -11,7 +11,7 @@ import {
   Alert,
   Modal,
 } from "react-native";
-import { Stack, useRouter, useFocusEffect } from "expo-router";
+import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { API_BASE_URL } from "../src/lib/config";
 import { theme } from "../src/ui/theme";
@@ -226,6 +226,7 @@ function prettyReportTitle(r: Report, language: "no" | "en") {
 }
 
 function reportStatusInfo(r: Report, language: "no" | "en") {
+  if ((r as any).status === "ARCHIVED" || (r as any).archived_at) return { label: language === "en" ? "Archived" : "Arkivert" };
   if ((r as any).closed_at || (r as any).status === "CLOSED") return { label: language === "en" ? "Closed" : "Avsluttet" };
   if ((r as any).status === "EXPIRED" || ((r as any).visible_until && Date.parse((r as any).visible_until) <= Date.now())) return { label: language === "en" ? "Expired" : "Utløpt" };
   if ((r as any).visible_until) {
@@ -283,6 +284,7 @@ function sortReportsByActivity(reports: Report[], activityByReport: Record<strin
 
 export default function MyReportsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string; reportId?: string }>();
   const { user } = useAuth();
   const { language, t } = useI18n();
   const [reports, setReports] = useState<Report[]>([]);
@@ -290,8 +292,15 @@ export default function MyReportsScreen() {
   const [activityByReport, setActivityByReport] = useState<Record<string, LastActivity | null>>({});
   const [matchCountByReport, setMatchCountByReport] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [section, setSection] = useState<"active" | "history">(params.section === "history" ? "history" : "active");
   const [confirmDialog, setConfirmDialog] = useState<{ kind: "extend" | "close" | "delete"; report: Report } | null>(null);
   const matchToReportRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (params.section === "history" || params.section === "active") {
+      setSection(params.section);
+    }
+  }, [params.section]);
   const lastSeenMapRef = useRef<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -320,10 +329,12 @@ export default function MyReportsScreen() {
 
       const reps: Report[] = data.reports ?? [];
       const matchToReport: Record<string, string> = data.matchToReport ?? {};
+      const historyMatchToReport: Record<string, string> = data.historyMatchToReport ?? {};
+      const allMatchToReport: Record<string, string> = { ...historyMatchToReport, ...matchToReport };
       const lastMessages: Array<{ conversation_id: string; sender_id: string; body: string; created_at: string }> = data.lastMessages ?? [];
 
       const reportToMatches: Record<string, string[]> = {};
-      for (const [mid, rid] of Object.entries(matchToReport)) {
+      for (const [mid, rid] of Object.entries(allMatchToReport)) {
         if (!rid) continue;
         if (!reportToMatches[rid]) reportToMatches[rid] = [];
         reportToMatches[rid].push(mid);
@@ -365,7 +376,7 @@ export default function MyReportsScreen() {
         activity[r.id] = latest;
       }
 
-      matchToReportRef.current = matchToReport;
+      matchToReportRef.current = allMatchToReport;
       setUnreadByReport(unread);
       setActivityByReport(activity);
       setMatchCountByReport(matchCounts);
@@ -546,6 +557,16 @@ export default function MyReportsScreen() {
 
   const dialogTitle = confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate found report?" : "Aktiver funnet-rapporten igjen?") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case?" : "Avslutt sak?") : (language === "en" ? "Delete case?" : "Slett sak?");
   const dialogBody = confirmDialog?.kind === "extend" ? (language === "en" ? "Keep the report active for up to 30 more days. Found reports can remain active for a maximum of 90 days." : "Hold rapporten aktiv i opptil 30 nye dager. Funnet-rapporter kan være aktive i maksimalt 90 dager.") : confirmDialog?.kind === "close" ? (language === "en" ? "The case stays in My cases, but it will no longer be used for new matches." : "Saken beholdes i Mine saker, men brukes ikke lenger for nye treff.") : (language === "en" ? "The case is removed from your account immediately. For security and fraud prevention, limited records may be retained for up to 90 days before permanent deletion." : "Saken fjernes straks fra kontoen din. Av hensyn til sikkerhet og forebygging av svindel kan begrensede opplysninger oppbevares i opptil 90 dager før permanent sletting.");
+  const activeReports = reports.filter((r) =>
+    String(r.status || "ACTIVE").toUpperCase() === "ACTIVE" &&
+    !r.closed_at &&
+    !r.archived_at &&
+    (!r.visible_until || Date.parse(r.visible_until) > Date.now())
+  );
+  const activeIds = new Set(activeReports.map((r) => r.id));
+  const historyReports = reports.filter((r) => !activeIds.has(r.id));
+  const visibleReports = section === "active" ? activeReports : historyReports;
+
   const runDialogAction = async () => { const current = confirmDialog; if (!current) return; setConfirmDialog(null); if (current.kind === "extend") await extendFoundReport(current.report); else if (current.kind === "close") await closeReport(current.report); else await deleteReport(current.report.id); };
 
   return (
@@ -554,29 +575,41 @@ export default function MyReportsScreen() {
       <View style={styles.safe}>
         <PremiumHeader
           title={language === "en" ? "My cases" : "Mine saker"}
-          subtitle={language === "en" ? "Overview and latest activity" : "Oversikt og siste aktivitet"}
+          subtitle={section === "active" ? (language === "en" ? "Active cases" : "Aktive saker") : (language === "en" ? "Case history" : "Historikk")}
           onBack={() => {
             router.replace("/(tabs)");
           }}
           right={<AuthHeaderAction />}
         />
 
+        <View style={styles.sectionTabs}>
+          <Pressable style={[styles.sectionTab, section === "active" && styles.sectionTabActive]} onPress={() => setSection("active")}>
+            <Text style={[styles.sectionTabText, section === "active" && styles.sectionTabTextActive]}>
+              {language === "en" ? `Active (${activeReports.length})` : `Aktive (${activeReports.length})`}
+            </Text>
+          </Pressable>
+          <Pressable style={[styles.sectionTab, section === "history" && styles.sectionTabActive]} onPress={() => setSection("history")}>
+            <Text style={[styles.sectionTabText, section === "history" && styles.sectionTabTextActive]}>
+              {language === "en" ? `History (${historyReports.length})` : `Historikk (${historyReports.length})`}
+            </Text>
+          </Pressable>
+        </View>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator />
             <Text style={styles.muted}>{language === "en" ? "Loading cases…" : "Laster saker…"}</Text>
           </View>
-        ) : reports.length === 0 ? (
+        ) : visibleReports.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.muted}>
-              {language === "en"
-                ? "No cases yet. When you report a lost or found item, they will appear here."
-                : "Ingen saker ennå. Når du melder inn noe som mistet eller funnet, vil sakene dukke opp her."}
+              {section === "active"
+                ? (language === "en" ? "No active cases right now." : "Ingen aktive saker akkurat nå.")
+                : (language === "en" ? "No case history yet." : "Ingen historikk ennå.")}
             </Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.list}>
-            {reports.map((r) => {
+            {visibleReports.map((r) => {
               const act = activityByReport[r.id] ?? null; const actFromMe = act?.sender_id === user?.id; const statusInfo = reportStatusInfo(r, language); const isClosed = r.status === "CLOSED" || !!r.closed_at; const isExpired = r.status === "EXPIRED" || (!!r.visible_until && Date.parse(r.visible_until) <= Date.now()); const latestChatId = act?.match_id; const count = matchCountByReport[r.id] ?? 0;
               return <View key={r.id} style={styles.card}>
                 <View style={styles.cardTopRow}><Text style={[styles.kindBadge, r.type === "FOUND" && styles.kindBadgeFound]}>{r.type === "LOST" ? (language === "en" ? "LOST" : "MISTET") : (language === "en" ? "FOUND" : "FUNNET")}</Text><Text style={[styles.statusBadge, isExpired && styles.statusExpired, isClosed && styles.statusClosed]}>{statusInfo.label}</Text></View>
@@ -607,6 +640,6 @@ export default function MyReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe:{flex:1,backgroundColor:theme.colors.bg},center:{flex:1,alignItems:"center",justifyContent:"center",padding:24},muted:{color:theme.colors.muted,fontWeight:"600",textAlign:"center"},list:{paddingHorizontal:14,paddingTop:8,paddingBottom:30},card:{padding:16,borderRadius:20,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.card,marginBottom:14},cardTopRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:12},kindBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#FFF1F2",color:"#BE123C",paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},kindBadgeFound:{backgroundColor:"#ECFDF3",color:"#15803D"},statusBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#EEF2FF",color:theme.colors.primary,paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},statusExpired:{backgroundColor:"#FFF7ED",color:"#B45309"},statusClosed:{backgroundColor:"#F1F5F9",color:"#475569"},title:{color:theme.colors.text,fontSize:18,lineHeight:23,fontWeight:"900"},meta:{marginTop:5,color:theme.colors.muted,fontSize:13,fontWeight:"600"},brandLine:{marginTop:5,color:theme.colors.muted,fontSize:13,fontWeight:"700"},extensionInfo:{marginTop:7,color:theme.colors.muted,fontSize:12,fontWeight:"700"},lastLine:{marginTop:9,color:theme.colors.text,fontSize:13,lineHeight:18,fontWeight:"700"},unread:{marginTop:6,color:theme.colors.primary,fontWeight:"900",fontSize:12},primaryActions:{flexDirection:"row",gap:8,marginTop:13},primaryBtn:{flex:1,minHeight:42,borderRadius:13,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary,paddingHorizontal:10},primaryBtnText:{color:"#FFF",fontWeight:"900",fontSize:13},secondaryPrimary:{backgroundColor:"#EEF2FF",borderWidth:1,borderColor:"#C7D2FE"},secondaryPrimaryText:{color:theme.colors.primary},noMatches:{alignSelf:"flex-start",minHeight:38,borderRadius:12,alignItems:"center",justifyContent:"center",paddingHorizontal:14,backgroundColor:"#F1F5F9",borderWidth:1,borderColor:"#E2E8F0"},noMatchesText:{color:theme.colors.muted,fontWeight:"800",fontSize:12},secondaryActions:{flexDirection:"row",flexWrap:"wrap",gap:18,marginTop:13,paddingTop:11,borderTopWidth:1,borderTopColor:"#EEF2F6"},secondaryLink:{color:"#475569",fontWeight:"800",fontSize:13},extendLink:{color:"#15803D",fontWeight:"900",fontSize:13},deleteLink:{color:"#B42318",fontWeight:"900",fontSize:13},reloadBtn:{marginTop:4,minHeight:44,borderRadius:14,borderWidth:1,borderColor:theme.colors.border,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.card},reloadTxt:{fontWeight:"800",color:theme.colors.text}
+  safe:{flex:1,backgroundColor:theme.colors.bg},sectionTabs:{flexDirection:"row",gap:8,paddingHorizontal:14,paddingTop:10,paddingBottom:4,backgroundColor:theme.colors.bg},sectionTab:{flex:1,minHeight:42,borderRadius:13,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.card,alignItems:"center",justifyContent:"center"},sectionTabActive:{backgroundColor:theme.colors.primary,borderColor:theme.colors.primary},sectionTabText:{color:theme.colors.muted,fontWeight:"900",fontSize:13},sectionTabTextActive:{color:"#FFF"},center:{flex:1,alignItems:"center",justifyContent:"center",padding:24},muted:{color:theme.colors.muted,fontWeight:"600",textAlign:"center"},list:{paddingHorizontal:14,paddingTop:8,paddingBottom:30},card:{padding:16,borderRadius:20,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.card,marginBottom:14},cardTopRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:12},kindBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#FFF1F2",color:"#BE123C",paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},kindBadgeFound:{backgroundColor:"#ECFDF3",color:"#15803D"},statusBadge:{overflow:"hidden",borderRadius:999,backgroundColor:"#EEF2FF",color:theme.colors.primary,paddingHorizontal:10,paddingVertical:5,fontSize:11,fontWeight:"900"},statusExpired:{backgroundColor:"#FFF7ED",color:"#B45309"},statusClosed:{backgroundColor:"#F1F5F9",color:"#475569"},title:{color:theme.colors.text,fontSize:18,lineHeight:23,fontWeight:"900"},meta:{marginTop:5,color:theme.colors.muted,fontSize:13,fontWeight:"600"},brandLine:{marginTop:5,color:theme.colors.muted,fontSize:13,fontWeight:"700"},extensionInfo:{marginTop:7,color:theme.colors.muted,fontSize:12,fontWeight:"700"},lastLine:{marginTop:9,color:theme.colors.text,fontSize:13,lineHeight:18,fontWeight:"700"},unread:{marginTop:6,color:theme.colors.primary,fontWeight:"900",fontSize:12},primaryActions:{flexDirection:"row",gap:8,marginTop:13},primaryBtn:{flex:1,minHeight:42,borderRadius:13,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary,paddingHorizontal:10},primaryBtnText:{color:"#FFF",fontWeight:"900",fontSize:13},secondaryPrimary:{backgroundColor:"#EEF2FF",borderWidth:1,borderColor:"#C7D2FE"},secondaryPrimaryText:{color:theme.colors.primary},noMatches:{alignSelf:"flex-start",minHeight:38,borderRadius:12,alignItems:"center",justifyContent:"center",paddingHorizontal:14,backgroundColor:"#F1F5F9",borderWidth:1,borderColor:"#E2E8F0"},noMatchesText:{color:theme.colors.muted,fontWeight:"800",fontSize:12},secondaryActions:{flexDirection:"row",flexWrap:"wrap",gap:18,marginTop:13,paddingTop:11,borderTopWidth:1,borderTopColor:"#EEF2F6"},secondaryLink:{color:"#475569",fontWeight:"800",fontSize:13},extendLink:{color:"#15803D",fontWeight:"900",fontSize:13},deleteLink:{color:"#B42318",fontWeight:"900",fontSize:13},reloadBtn:{marginTop:4,minHeight:44,borderRadius:14,borderWidth:1,borderColor:theme.colors.border,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.card},reloadTxt:{fontWeight:"800",color:theme.colors.text}
 });
 const dialogStyles=StyleSheet.create({backdrop:{flex:1,backgroundColor:"rgba(15,23,42,0.5)",alignItems:"center",justifyContent:"center",padding:24},card:{width:"100%",maxWidth:410,borderRadius:22,backgroundColor:"#FFF",padding:22,borderWidth:1,borderColor:"#E2E8F0",shadowColor:"#000",shadowOpacity:.18,shadowRadius:24,shadowOffset:{width:0,height:12},elevation:12},iconCircle:{width:52,height:52,borderRadius:26,alignSelf:"center",alignItems:"center",justifyContent:"center",backgroundColor:"#EEF2FF"},iconText:{color:theme.colors.primary,fontSize:25,fontWeight:"900"},title:{marginTop:14,textAlign:"center",color:theme.colors.text,fontSize:19,fontWeight:"900"},body:{marginTop:9,textAlign:"center",color:theme.colors.muted,fontSize:14,lineHeight:21,fontWeight:"600"},actions:{flexDirection:"row",gap:10,marginTop:20},cancelBtn:{flex:1,minHeight:46,borderRadius:13,alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:theme.colors.border},cancelText:{color:theme.colors.text,fontWeight:"900"},confirmBtn:{flex:1,minHeight:46,borderRadius:13,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary},deleteConfirmBtn:{backgroundColor:"#B42318"},confirmText:{color:"#FFF",fontWeight:"900"}});

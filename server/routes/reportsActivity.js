@@ -61,42 +61,52 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     // 2) Hent alle matcher for disse rapportene (2 queries, så merge)
     const { data: lostMatches, error: lmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
+      .select("id, status, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
       .in("lost_id", reportIds);
     if (lmErr) return res.status(400).json({ error: lmErr.message });
 
     const { data: foundMatches, error: fmErr } = await supaAdmin
       .from("matches")
-      .select("id, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
+      .select("id, status, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
       .in("found_id", reportIds);
     if (fmErr) return res.status(400).json({ error: fmErr.message });
 
     const merged = new Map();
     for (const m of (lostMatches || [])) merged.set(m.id, m);
     for (const m of (foundMatches || [])) merged.set(m.id, m);
-    const allMatches = Array.from(merged.values()).filter(
-      (m) =>
-        isActiveReport(m?.lost) &&
-        isActiveReport(m?.found) &&
-        m?.lost?.user_id !== m?.found?.user_id
+    const ownedMatches = Array.from(merged.values()).filter(
+      (m) => m?.lost?.user_id !== m?.found?.user_id
     );
 
-    // 3) Bygg matchId -> reportId map (for realtime mapping i app)
-    // Hvis bruker (uvanlig) eier begge sider, velger vi lost_id først.
-    const matchToReport = {};
-    for (const m of allMatches) {
-      const lostId = String(m.lost_id || "");
-      const foundId = String(m.found_id || "");
-      if (lostId && reportSet.has(lostId)) {
-        matchToReport[String(m.id)] = lostId;
-      } else if (foundId && reportSet.has(foundId)) {
-        matchToReport[String(m.id)] = foundId;
+    const activeMatches = ownedMatches.filter(
+      (m) => isActiveReport(m?.lost) && isActiveReport(m?.found)
+    );
+
+    const historicalMatches = ownedMatches.filter((m) =>
+      ["CONFIRMED", "PAID"].includes(String(m?.status || "").toUpperCase())
+    );
+
+    function buildMap(matches) {
+      const out = {};
+      for (const m of matches) {
+        const lostId = String(m.lost_id || "");
+        const foundId = String(m.found_id || "");
+        if (lostId && reportSet.has(lostId)) out[String(m.id)] = lostId;
+        else if (foundId && reportSet.has(foundId)) out[String(m.id)] = foundId;
       }
+      return out;
     }
 
-    const matchIds = Object.keys(matchToReport);
+    // Active matches drive active match counts. Confirmed historical matches retain chat access.
+    const matchToReport = buildMap(activeMatches);
+    const historyMatchToReport = buildMap(historicalMatches);
+    const matchIds = Array.from(new Set([
+      ...Object.keys(matchToReport),
+      ...Object.keys(historyMatchToReport),
+    ]));
+
     if (matchIds.length === 0) {
-      return res.json({ reports: reps, matchToReport, lastMessages: [] });
+      return res.json({ reports: reps, matchToReport, historyMatchToReport, lastMessages: [] });
     }
 
     // 4) Hent siste melding per match i ett kall (krever view: last_message_per_conversation)
@@ -116,6 +126,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     return res.json({
       reports: reps,
       matchToReport,
+      historyMatchToReport,
       lastMessages: lastRows || [],
     });
   } catch (e) {

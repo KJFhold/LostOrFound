@@ -25,17 +25,59 @@ type Notif = {
   target_kind?: "match" | "report" | "chat" | "unknown" | string;
 };
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string, language: "no" | "en") {
   const d = new Date(iso);
   const ms = Date.now() - d.getTime();
   if (!Number.isFinite(ms)) return "";
   const min = Math.floor(ms / 60000);
+  if (language === "en") {
+    if (min < 1) return "now";
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h} h`;
+    const days = Math.floor(h / 24);
+    return `${days} d`;
+  }
   if (min < 1) return "nå";
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h} t`;
   const days = Math.floor(h / 24);
   return `${days} d`;
+}
+
+function notificationTitle(n: Notif, language: "no" | "en") {
+  const type = String(n.type || "").toUpperCase();
+  if (type === "NEW_MATCH") return language === "en" ? "New match" : "Nytt treff";
+  if (type === "MATCH_CONFIRMED") return language === "en" ? "Match confirmed" : "Treff bekreftet";
+  if (type === "NEW_MESSAGE") return language === "en" ? "New message" : "Ny melding";
+  if (type === "REPORT_UPDATED") return language === "en" ? "Case updated" : "Sak oppdatert";
+  if (type === "REPORT_EXPIRING") return language === "en" ? "Case expiring soon" : "Saken utløper snart";
+  if (type === "REPORT_EXPIRED") return language === "en" ? "Case expired" : "Saken er utløpt";
+  if (type === "REPORT_ARCHIVED") return language === "en" ? "Case archived" : "Saken er arkivert";
+  return String(n.title || (language === "en" ? "Notification" : "Varsel"));
+}
+
+function notificationBody(n: Notif, language: "no" | "en") {
+  const type = String(n.type || "").toUpperCase();
+  const count = Number(n.agg_count || 0);
+  if (type === "NEW_MATCH") {
+    if (count > 1) return language === "en" ? `${count} possible matches were found for your case.` : `${count} mulige treff ble funnet for saken din.`;
+    return language === "en" ? "A possible match was found for your case." : "Et mulig treff ble funnet for saken din.";
+  }
+  if (type === "MATCH_CONFIRMED") {
+    return language === "en"
+      ? "The other party has confirmed the match. Open chat to continue."
+      : "Motparten har bekreftet treffet. Åpne chat for å avtale videre.";
+  }
+  if (type === "NEW_MESSAGE") {
+    return language === "en" ? "You have a new chat message." : "Du har en ny chatmelding.";
+  }
+  if (type === "REPORT_UPDATED") return language === "en" ? "A case has been updated." : "En sak er oppdatert.";
+  if (type === "REPORT_EXPIRING") return language === "en" ? "A case is nearing the end of its visible period." : "En sak nærmer seg slutten av synlighetsperioden.";
+  if (type === "REPORT_EXPIRED") return language === "en" ? "A case is no longer active in new matching." : "En sak er ikke lenger aktiv i nye treff.";
+  if (type === "REPORT_ARCHIVED") return language === "en" ? "A found report has been archived and is available in your history." : "En funnet-rapport er arkivert og finnes i historikken din.";
+  return n.body ? String(n.body) : null;
 }
 
 function invalidReasonLabel(n: Notif, language: "no" | "en") {
@@ -189,7 +231,9 @@ export default function NotificationsScreen() {
           return;
         }
         if (resolved.target_kind === "report") {
-          router.push({ pathname: "/match", params: { reportId: resolved.target_id } });
+          const lifecycleType = String(n.type || "").toUpperCase();
+          const section = lifecycleType === "REPORT_EXPIRING" ? "active" : "history";
+          router.push({ pathname: "/my-reports", params: { section, reportId: resolved.target_id } });
           return;
         }
 
@@ -236,14 +280,14 @@ export default function NotificationsScreen() {
                 <View style={[styles.card, unread && styles.cardUnread, invalid && styles.cardInvalid]}>
                   <Pressable onPress={() => openNotif(item)} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
                     <View style={styles.rowTop}>
-                      <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.title} numberOfLines={1}>{notificationTitle(item, language)}</Text>
                       <View style={styles.timeWrap}>
                         {unread && <Text style={styles.unreadDot}>●</Text>}
-                        <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
+                        <Text style={styles.time}>{timeAgo(item.created_at, language)}</Text>
                       </View>
                     </View>
 
-                    {!!item.body && <Text style={styles.body} numberOfLines={2}>{item.body}</Text>}
+                    {notificationBody(item, language) && <Text style={styles.body} numberOfLines={2}>{notificationBody(item, language)}</Text>}
 
                     {invalid && (
                       <View style={styles.invalidBadgeWrap}>

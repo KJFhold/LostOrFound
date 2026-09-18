@@ -89,7 +89,7 @@ async function resolveNotificationTarget(notification, userId) {
 async function getUserNotification(id, userId) {
   const { data, error } = await supaAdmin
     .from("notifications")
-    .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
+    .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -108,7 +108,7 @@ router.get("/", requireUser, async (req, res) => {
 
     const { data, error } = await supaAdmin
       .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, agg_count")
+      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, agg_count, notification_key")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -241,7 +241,7 @@ router.delete("/missing", requireUser, async (req, res) => {
 
     const { data, error } = await supaAdmin
       .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at")
+      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key")
       .eq("user_id", userId)
       .limit(300);
 

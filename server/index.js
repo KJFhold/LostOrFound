@@ -145,6 +145,15 @@ try {
   console.warn("[BOOT] /matches NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /report-commerce ----
+try {
+  const reportCommerceRoutes = require("./routes/reportCommerce");
+  app.use("/report-commerce", reportCommerceRoutes);
+  console.log("[BOOT] Mounted /report-commerce routes");
+} catch (e) {
+  console.warn("[BOOT] /report-commerce NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

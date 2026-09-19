@@ -202,7 +202,8 @@ async function cleanupMatchesForReport(reportId) {
 
 function normalizeSearchAreas(value) {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 20).map((area, index) => {
+  if (value.length > 3) throw new Error("TOO_MANY_SEARCH_AREAS");
+  return value.map((area, index) => {
     const kind = String(area?.kind || "CIRCLE").toUpperCase();
     if (!["CIRCLE", "ROUTE", "POLYGON"].includes(kind)) throw new Error("INVALID_SEARCH_AREA_KIND");
     const points = Array.isArray(area?.points) ? area.points.slice(0, 100).map((point) => {

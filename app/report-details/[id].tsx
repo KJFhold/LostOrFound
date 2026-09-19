@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import ImageViewing from "react-native-image-viewing";
 import { API_BASE_URL } from "../../src/lib/config";
 import { supabase } from "../../src/lib/supabase";
 import { useI18n } from "../../src/i18n/I18nProvider";
@@ -39,6 +40,8 @@ export default function ReportDetailsScreen() {
   const { language } = useI18n();
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -59,6 +62,11 @@ export default function ReportDetailsScreen() {
   }, [id, language]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const viewerImages = useMemo(
+    () => (data?.images || []).filter((image) => !!image.signed_url).map((image) => ({ uri: String(image.signed_url) })),
+    [data?.images]
+  );
 
   const lastByMatch = useMemo(() => {
     const map: Record<string, any> = {};
@@ -90,7 +98,23 @@ export default function ReportDetailsScreen() {
               <View style={styles.card}>
                 <Text style={styles.h2}>{language === "en" ? "Photos" : "Bilder"}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.images}>
-                  {data.images.map((image) => image.signed_url ? <Image key={image.id} source={{ uri: image.signed_url }} style={styles.image} resizeMode="cover" /> : null)}
+                  {data.images.map((image) => {
+                    if (!image.signed_url) return null;
+                    const viewerIndex = viewerImages.findIndex((entry) => entry.uri === image.signed_url);
+                    return (
+                      <Pressable
+                        key={image.id}
+                        style={styles.imageFrame}
+                        onPress={() => {
+                          setImageViewerIndex(Math.max(0, viewerIndex));
+                          setImageViewerVisible(true);
+                        }}
+                      >
+                        <Image source={{ uri: image.signed_url }} style={styles.image} resizeMode="contain" />
+                        <View style={styles.imageHint}><Text style={styles.imageHintText}>{language === "en" ? "Tap to enlarge" : "Trykk for å forstørre"}</Text></View>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </View>
             )}
@@ -160,6 +184,14 @@ export default function ReportDetailsScreen() {
             </Pressable>
           </ScrollView>
         )}
+        <ImageViewing
+          images={viewerImages}
+          imageIndex={Math.min(imageViewerIndex, Math.max(0, viewerImages.length - 1))}
+          visible={imageViewerVisible && viewerImages.length > 0}
+          onRequestClose={() => setImageViewerVisible(false)}
+          swipeToCloseEnabled
+          doubleTapToZoomEnabled
+        />
       </View>
     </>
   );
@@ -184,7 +216,10 @@ const styles = StyleSheet.create({
   card: { padding: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18, marginBottom: 12 },
   h2: { color: theme.colors.text, fontWeight: "900", fontSize: 17 },
   images: { gap: 10, paddingTop: 12 },
-  image: { width: 230, height: 180, borderRadius: 14, backgroundColor: "#E2E8F0" },
+  imageFrame: { width: 260, height: 210, borderRadius: 14, overflow: "hidden", backgroundColor: "#0F172A", borderWidth: 1, borderColor: theme.colors.border },
+  image: { width: "100%", height: "100%", backgroundColor: "#0F172A" },
+  imageHint: { position: "absolute", right: 8, bottom: 8, backgroundColor: "rgba(15,23,42,0.78)", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 },
+  imageHintText: { color: "#FFFFFF", fontWeight: "800", fontSize: 11 },
   info: { flexDirection: "row", justifyContent: "space-between", gap: 18, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   infoLabel: { flex: 1, color: theme.colors.muted, fontWeight: "700" },
   infoValue: { flex: 1.5, color: theme.colors.text, fontWeight: "700", textAlign: "right" },

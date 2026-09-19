@@ -465,7 +465,8 @@ export default function CreateReportScreen() {
   const longitude = (draft as any).location?.longitude ?? 10.7522;  
   const radiusMeters = (draft as any).location?.radiusMeters;  
   const effectiveRadiusMeters = type === "FOUND" ? 10 : radiusMeters;
-  const locationConfirmed = (draft as any).location?.confirmed === true;  
+  const locationConfirmed = (draft as any).location?.confirmed === true;
+  const searchAreas = Array.isArray((draft as any).searchAreas) ? (draft as any).searchAreas : [];  
   const previewRegion = useMemo(  
     () => ({  
       latitude,  
@@ -654,6 +655,7 @@ const subcategoryLabel = useMemo(() => {
         setLocationLabel(label);
         setLocationLabelTouched(!!label);
         setField("locationLabel" as any, label);
+        setField("searchAreas" as any, Array.isArray(report.search_areas) ? report.search_areas : []);
         const when = fmtLocal(report.occurred_at);
         setDateStr(when.date);
         setTimeStr(when.time);
@@ -911,7 +913,8 @@ const subcategoryLabel = useMemo(() => {
         lng: longitude,  
         // ✅ VIKTIG: send radius til backend, ellers blir matching pin-basert  
         radius_m: effectiveRadiusMeters ?? undefined,  
-        location_label: locationLabel?.trim() || undefined,  
+        location_label: locationLabel?.trim() || undefined,
+        search_areas: searchAreas,  
         ...(type === "LOST" && rewardEnabled ? { reward_ore: Math.max(0, Math.round(Number(rewardNOK) * 100)) } : {}),
         ...(!isEditMode ? { client_request_id: requestIdRef.current } : {}),
         ...(options?.testOverrideWeeklyLimit ? { test_override_weekly_limit: true } : {}),
@@ -1368,7 +1371,8 @@ const subcategoryLabel = useMemo(() => {
                 </Pressable>  
               </View>  
               <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Position" : "Posisjon"}</Text>  
-              <Text style={styles.muted}>{language === "en" ? "Choose the place on the map or enter an address / place description." : "Velg sted på kart eller skriv inn adresse / stedsbeskrivelse."}</Text>    
+              <Text style={styles.muted}>{language === "en" ? "Add one or more possible places, a route or an area." : "Legg til ett eller flere mulige steder, en rute eller et område."}</Text>
+              {searchAreas.length > 0 && <Text style={styles.confirmedText}>{language === "en" ? `${searchAreas.length} search area(s) saved` : `${searchAreas.length} søkeområder lagret`}</Text>}    
               <Text style={[locationConfirmed ? styles.confirmedText : styles.unconfirmedText]}>{locationConfirmed ? (language === "en" ? "✓ Location confirmed" : "✓ Sted bekreftet") : (language === "en" ? "Location must be confirmed on the map" : "Stedet må bekreftes på kartet")}</Text>
               <Pressable style={[styles.mapPreviewWrap, validationMissing.includes(validationKey.location) && styles.inputError]} onPress={openMap}>  
                 <View pointerEvents="none" style={styles.mapPreviewInner}>  

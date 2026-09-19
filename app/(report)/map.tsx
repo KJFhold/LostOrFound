@@ -1,433 +1,117 @@
-﻿// app/(report)/map.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, Button, Platform, Alert } from "react-native";
-import MapView, { Marker, Circle, MapPressEvent, PROVIDER_GOOGLE, Region } from "react-native-maps";
+import React, { useMemo, useRef, useState } from "react";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import MapView, { Circle, Marker, MapPressEvent, Polygon, Polyline, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useReportDraft } from "../../src/contexts/ReportDraftContext";
-import { useI18n } from "../../src/i18n/I18nProvider";
-import { reverseGeocodeToLabel } from "../../src/lib/reverseGeocode";
 import * as Location from "expo-location";
-import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
+import { useReportDraft, type SearchArea } from "../../src/contexts/ReportDraftContext";
+import { useI18n } from "../../src/i18n/I18nProvider";
 
-// Tips:
-// - Legg API-nøkkelen i en EXPO_PUBLIC_* env (Expo): EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=...
-// - Aktiver "Places API" + billing i Google Cloud.
-const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? "";
-
-type Option = { label: string; value: number };
-
-const RADIUS_OPTIONS: Option[] = [
-  { label: "100 m", value: 100 },
-  { label: "250 m", value: 250 },
-  { label: "500 m", value: 500 },
-  { label: "1 km", value: 1000 },
-  { label: "2 km", value: 2000 },
-];
+const RADIUS_OPTIONS = [100, 250, 500, 1000, 2000, 5000];
+type Mode = "CIRCLE" | "ROUTE" | "POLYGON";
+const uid = () => `area_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 export default function MapPickerScreen() {
   const router = useRouter();
-  const { language } = useI18n();
   const insets = useSafeAreaInsets();
-  const topOffset = (insets?.top ?? 0) + 10;
-
+  const { language } = useI18n();
   const { draft, setLocation, setField } = useReportDraft();
-
   const mapRef = useRef<MapView>(null);
-
-  // iOS: bruk Apple Maps som standard. Google Maps på iOS krever ekstra native-oppsett.
-  // Android: bruk Google-provider.
-  const provider = Platform.OS === "android" ? PROVIDER_GOOGLE : undefined;
-
-  // Unngå "kontrollert" region (region={...}) som kan gi drift/feedback-loop.
-  // Vi bruker initialRegion + animateToRegion når vi vil flytte kartet.
-  const regionRef = useRef<Region>({
-    latitude: 59.9139,
-    longitude: 10.7522,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  });
-
-  const initialLat = draft.location?.latitude ?? 59.9139;
-  const initialLng = draft.location?.longitude ?? 10.7522;
-  const initialRadius = draft.location?.radiusMeters ?? 500;
-
-  const initialRegion = useMemo<Region>(
-    () => ({
-      latitude: initialLat,
-      longitude: initialLng,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
-    }),
-    [initialLat, initialLng]
-  );
-
-  const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(
-    draft.location ? { latitude: initialLat, longitude: initialLng } : null
-  );
-
-  const [radius, setRadius] = useState<number>(initialRadius);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("CIRCLE");
+  const [radius, setRadius] = useState(draft.location?.radiusMeters ?? 500);
+  const [areas, setAreas] = useState<SearchArea[]>(draft.searchAreas || []);
+  const [workingPoints, setWorkingPoints] = useState<Array<{ latitude: number; longitude: number }>>([]);
   const [locating, setLocating] = useState(false);
-  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
-  const [region, setRegion] = useState<Region>(initialRegion); // kun for delta/logic
 
-  useEffect(() => {
-    regionRef.current = initialRegion;
-    setRegion(initialRegion);
-  }, [initialRegion]);
+  const initialRegion = useMemo<Region>(() => ({
+    latitude: draft.location?.latitude ?? areas[0]?.points[0]?.latitude ?? 59.9139,
+    longitude: draft.location?.longitude ?? areas[0]?.points[0]?.longitude ?? 10.7522,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  }), [areas, draft.location]);
 
-  const onRegionChangeComplete = (r: Region) => {
-    regionRef.current = r;
-    setRegion(r);
+  const onMapPress = (event: MapPressEvent) => {
+    const point = event.nativeEvent.coordinate;
+    if (mode === "CIRCLE") {
+      setAreas((current) => [...current, { id: uid(), kind: "CIRCLE", radiusMeters: radius, points: [point] }]);
+    } else {
+      setWorkingPoints((current) => [...current, point]);
+    }
   };
 
-  const radiusLabel = useMemo(() => {
-    return radius >= 1000 ? `${(radius / 1000).toFixed(0)} km` : `${radius} m`;
-  }, [radius]);
-
-  const onPressMap = (e: MapPressEvent) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    setPin({ latitude, longitude });
-    setMenuOpen(false);
+  const addWorkingArea = () => {
+    const minimum = mode === "ROUTE" ? 2 : 3;
+    if (workingPoints.length < minimum) {
+      Alert.alert(language === "en" ? "More points needed" : "Flere punkter kreves", language === "en" ? `Add at least ${minimum} points.` : `Legg til minst ${minimum} punkter.`);
+      return;
+    }
+    setAreas((current) => [...current, { id: uid(), kind: mode, radiusMeters: mode === "ROUTE" ? radius : undefined, points: workingPoints }]);
+    setWorkingPoints([]);
   };
 
-  const animateTo = (r: Region, setPinAlso: boolean) => {
-    regionRef.current = r;
-    setRegion(r);
-    if (setPinAlso) setPin({ latitude: r.latitude, longitude: r.longitude });
-    requestAnimationFrame(() => {
-      mapRef.current?.animateToRegion(r, 250);
-    });
+  const undo = () => {
+    if (workingPoints.length) setWorkingPoints((p) => p.slice(0, -1));
+    else setAreas((a) => a.slice(0, -1));
   };
 
   const centerOnUser = async () => {
     try {
       setLocating(true);
-      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLocationPermissionGranted(false);
-        Alert.alert(
-          language === "en" ? "Location not enabled" : "Posisjon ikke aktivert",
-          canAskAgain
-            ? (language === "en" ? "The app needs location access to find your position. You can also choose a place manually on the map." : "Appen trenger tilgang til posisjon for å finne hvor du er. Du kan også velge sted manuelt på kartet.")
-            : (language === "en" ? "Location access is denied. Open Settings to grant access, or choose a place manually on the map." : "Posisjonstilgang er avslått. Åpne Innstillinger for å gi appen tilgang, eller velg sted manuelt på kartet.")
-        );
-        return;
-      }
-
-      setLocationPermissionGranted(true);
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") return;
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = pos.coords;
-      const base = regionRef.current ?? region;
-      animateTo({ ...base, latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, true);
-      setMenuOpen(false);
-    } catch (e: any) {
-      Alert.alert(language === "en" ? "Location" : "Posisjon", e?.message ?? (language === "en" ? "Could not get your location." : "Kunne ikke hente posisjon."));
-    } finally {
-      setLocating(false);
-    }
-  };
-  const zoomBy = async (delta: number) => {
-    const m = mapRef.current;
-    if (!m) return;
-    const cam = await m.getCamera();
-    const current = cam.zoom ?? 14;
-    const next = Math.max(2, Math.min(20, current + delta));
-    await m.animateCamera({ ...cam, zoom: next }, { duration: 180 });
+      const point = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      mapRef.current?.animateToRegion({ ...point, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 250);
+    } finally { setLocating(false); }
   };
 
   const confirm = () => {
-    if (!pin) return;
-
-    setLocation({
-      latitude: pin.latitude,
-      longitude: pin.longitude,
-      radiusMeters: radius,
-      confirmed: true,
-    });
-
-    // Best effort: lagre label umiddelbart for å unngå at gammel label henger igjen
-    (async () => {
-      try {
-        const label = await reverseGeocodeToLabel(pin.latitude, pin.longitude, { language: language === "en" ? "en" : "no" });
-        if (label) setField?.("locationLabel" as any, label);
-      } catch {
-        // ignore
-      }
-    })();
-
+    if (workingPoints.length) {
+      Alert.alert(language === "en" ? "Finish the area" : "Fullfør området", language === "en" ? "Add or discard the points currently being drawn." : "Legg til eller forkast punktene som tegnes nå.");
+      return;
+    }
+    if (!areas.length) {
+      Alert.alert(language === "en" ? "No search area" : "Ingen søkeområde", language === "en" ? "Add at least one area." : "Legg til minst ett område.");
+      return;
+    }
+    const primary = areas[0].points[0];
+    setField("searchAreas" as any, areas);
+    setLocation({ latitude: primary.latitude, longitude: primary.longitude, radiusMeters: areas[0].radiusMeters ?? radius, confirmed: true });
     router.back();
   };
 
-  // Default: prøv å sentrere kartet på bruker ved første åpning hvis draft ikke har posisjon
-  useEffect(() => {
-    if (draft.location) return;
-
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") return;
-        setLocationPermissionGranted(true);
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const { latitude, longitude } = pos.coords;
-        const base = regionRef.current ?? region;
-        animateTo({ ...base, latitude, longitude }, false);
-      } catch {
-        // fallback: Oslo
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* Top bar (alltid mulig å komme seg ut) */}
-      <View style={[styles.topBar, { paddingTop: (insets?.top ?? 0) + 6 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹</Text>
-        </Pressable>
-        <Text style={styles.topTitle}>{language === "en" ? "Confirm location" : "Bekreft posisjon"}</Text>
-        <View style={{ width: 44 }} />
+    <View style={styles.safe}>
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+        <Pressable onPress={() => router.back()} style={styles.headerButton}><Text style={styles.headerButtonText}>‹</Text></Pressable>
+        <View style={{ flex: 1 }}><Text style={styles.title}>{language === "en" ? "Search areas" : "Søkeområder"}</Text><Text style={styles.subtitle}>{language === "en" ? `${areas.length} saved area(s)` : `${areas.length} lagrede områder`}</Text></View>
+        <Pressable onPress={undo} style={styles.undo}><Text style={styles.undoText}>{language === "en" ? "Undo" : "Angre"}</Text></Pressable>
       </View>
 
-      <MapView
-        ref={mapRef}
-        provider={provider}
-        style={{ flex: 1 }}
-        initialRegion={initialRegion}
-        onRegionChangeComplete={onRegionChangeComplete}
-        onPress={onPressMap}
-        zoomEnabled
-        scrollEnabled
-        rotateEnabled={false}
-        pitchEnabled={false}
-        minZoomLevel={6}
-        maxZoomLevel={20}
-        showsCompass
-        showsUserLocation={locationPermissionGranted}
-        showsMyLocationButton={false}
-      >
-        {pin && (
-          <>
-            <Marker coordinate={pin} />
-            <Circle
-              center={pin}
-              radius={radius}
-              strokeWidth={2}
-              strokeColor="rgba(37, 99, 235, 0.8)"
-              fillColor="rgba(37, 99, 235, 0.18)"
-            />
-          </>
-        )}
+      <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={initialRegion} onPress={onMapPress}>
+        {areas.map((area) => {
+          if (area.kind === "CIRCLE") return <React.Fragment key={area.id}><Marker coordinate={area.points[0]} /><Circle center={area.points[0]} radius={area.radiusMeters || 500} strokeWidth={2} strokeColor="#2563EB" fillColor="rgba(37,99,235,0.18)" /></React.Fragment>;
+          if (area.kind === "ROUTE") return <Polyline key={area.id} coordinates={area.points} strokeWidth={8} strokeColor="rgba(220,38,38,0.72)" />;
+          return <Polygon key={area.id} coordinates={area.points} strokeWidth={2} strokeColor="#7C3AED" fillColor="rgba(124,58,237,0.18)" />;
+        })}
+        {workingPoints.map((point, index) => <Marker key={`working-${index}`} coordinate={point} pinColor="#F59E0B" />)}
+        {mode === "ROUTE" && workingPoints.length > 1 && <Polyline coordinates={workingPoints} strokeWidth={6} strokeColor="#F59E0B" />}
+        {mode === "POLYGON" && workingPoints.length > 2 && <Polygon coordinates={workingPoints} strokeWidth={2} strokeColor="#F59E0B" fillColor="rgba(245,158,11,0.16)" />}
       </MapView>
 
-      {/* Overlay: søk + kontroller */}
-      <View pointerEvents="box-none" style={[styles.topOverlay, { top: topOffset + 44 }]}>
-        <View pointerEvents="auto" style={styles.searchWrap}>
-          <GooglePlacesAutocomplete
-            placeholder={language === "en" ? "Search for a place or address…" : "Søk sted eller adresse…"}
-            fetchDetails
-            enablePoweredByContainer={false}
-            debounce={250}
-            query={{ key: GOOGLE_PLACES_API_KEY, language: language === "en" ? "en" : "no" }}
-            onPress={(_, details) => {
-              const loc: any = (details as any)?.geometry?.location;
-              const lat = typeof loc?.lat === "function" ? loc.lat() : loc?.lat;
-              const lng = typeof loc?.lng === "function" ? loc.lng() : loc?.lng;
-              if (typeof lat === "number" && typeof lng === "number") {
-                setMenuOpen(false);
-                const base = regionRef.current ?? region;
-                animateTo({ ...base, latitude: lat, longitude: lng }, true);
-              }
-            }}
-            styles={{
-              container: { flex: 0 },
-              textInputContainer: styles.placesInputContainer,
-              textInput: styles.placesInput,
-              listView: styles.placesList,
-              row: styles.placesRow,
-              separator: styles.placesSeparator,
-              description: styles.placesDesc,
-            }}
-          />
-          {!GOOGLE_PLACES_API_KEY && (
-            <Text style={styles.apiKeyHint}>{language === "en" ? "Tip: Set EXPO_PUBLIC_GOOGLE_PLACES_API_KEY to enable place search." : "Tips: Sett EXPO_PUBLIC_GOOGLE_PLACES_API_KEY for å aktivere stedsøk."}</Text>
-          )}
+      <View style={[styles.panel, { bottom: insets.bottom + 12 }]}>
+        <View style={styles.modes}>
+          {(["CIRCLE", "ROUTE", "POLYGON"] as Mode[]).map((item) => <Pressable key={item} onPress={() => { setMode(item); setWorkingPoints([]); }} style={[styles.mode, mode === item && styles.modeActive]}><Text style={[styles.modeText, mode === item && styles.modeTextActive]}>{item === "CIRCLE" ? (language === "en" ? "Place" : "Sted") : item === "ROUTE" ? (language === "en" ? "Route" : "Rute") : (language === "en" ? "Area" : "Område")}</Text></Pressable>)}
         </View>
-
-        <View pointerEvents="auto" style={styles.controlsRow}>
-          <View style={styles.zoomCol}>
-            <Pressable style={styles.zoomBtn} onPress={() => zoomBy(+1)}>
-              <Text style={styles.zoomTxt}>+</Text>
-            </Pressable>
-            <Pressable style={styles.zoomBtn} onPress={() => zoomBy(-1)}>
-              <Text style={styles.zoomTxt}>−</Text>
-            </Pressable>
-          </View>
-
-          <Pressable style={styles.locateBtn} onPress={centerOnUser} disabled={locating}>
-            <Text style={styles.locateTxt}>{locating ? (language === "en" ? "Locating…" : "Finner…") : (language === "en" ? "Use my location" : "Bruk min posisjon")}</Text>
-          </Pressable>
-
-          <View style={styles.dropdownWrap}>
-            <Pressable style={styles.dropdownBtn} onPress={() => setMenuOpen((s) => !s)}>
-              <Text style={styles.dropdownTxt}>{language === "en" ? "Radius" : "Radius"}: {radiusLabel} ▾</Text>
-            </Pressable>
-            {menuOpen && (
-              <View style={styles.dropdownMenu}>
-                {RADIUS_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    style={[styles.dropdownItem, radius === opt.value && styles.dropdownItemActive]}
-                    onPress={() => {
-                      setRadius(opt.value);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Text style={[styles.dropdownItemTxt, radius === opt.value && styles.dropdownItemTxtActive]}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Bottom bar: alltid en vei ut */}
-      <View style={[styles.bottomBar, { paddingBottom: (insets?.bottom ?? 0) + 10 }]}>
-        <View style={{ flex: 1, marginRight: 10 }}>
-          <Button title={language === "en" ? "Cancel" : "Avbryt"} onPress={() => router.back()} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button title={language === "en" ? "Confirm" : "Bekreft"} onPress={confirm} disabled={!pin} />
-        </View>
+        <Text style={styles.help}>{mode === "CIRCLE" ? (language === "en" ? "Tap several possible places." : "Trykk på flere mulige steder.") : (language === "en" ? "Tap points in order, then add the shape." : "Trykk punkter i rekkefølge, og legg deretter til formen.")}</Text>
+        <View style={styles.radiusRow}>{RADIUS_OPTIONS.map((m) => <Pressable key={m} onPress={() => setRadius(m)} style={[styles.radius, radius === m && styles.radiusActive]}><Text style={[styles.radiusText, radius === m && styles.radiusTextActive]}>{m >= 1000 ? `${m / 1000} km` : `${m} m`}</Text></Pressable>)}</View>
+        {mode !== "CIRCLE" && <Pressable onPress={addWorkingArea} style={styles.secondary}><Text style={styles.secondaryText}>{language === "en" ? "Add drawn shape" : "Legg til tegnet form"}</Text></Pressable>}
+        <View style={styles.actions}><Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : (language === "en" ? "My location" : "Min posisjon")}</Text></Pressable><Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{language === "en" ? "Confirm areas" : "Bekreft områder"}</Text></Pressable></View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    zIndex: 200,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.06)",
-  },
-  backBtn: {
-    width: 44,
-    height: 40,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.06)",
-  },
-  backTxt: { fontSize: 28, fontWeight: "900", color: "#111", marginTop: -2 },
-  topTitle: { fontSize: 16, fontWeight: "900", color: "#111" },
-
-  topOverlay: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    zIndex: 150,
-    ...(Platform.OS === "android" ? { elevation: 10 } : {}),
-  },
-
-  searchWrap: { borderRadius: 14, overflow: "visible" },
-  placesInputContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.12)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  placesInput: { height: 42, fontSize: 16, fontWeight: "700", color: "#111" },
-  placesList: {
-    marginTop: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.12)",
-    backgroundColor: "#fff",
-    overflow: "hidden",
-    zIndex: 9999,
-    ...(Platform.OS === "android" ? { elevation: 20 } : {}),
-  },
-  placesRow: { paddingVertical: 12, paddingHorizontal: 12 },
-  placesSeparator: { height: 1, backgroundColor: "rgba(0,0,0,0.06)" },
-  placesDesc: { fontWeight: "700", color: "#111" },
-  apiKeyHint: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.95)",
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    alignSelf: "flex-start",
-  },
-
-  controlsRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 10 },
-  zoomCol: { flexDirection: "column" },
-  zoomBtn: {
-    backgroundColor: "rgba(0,0,0,0.65)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    marginBottom: 8,
-    ...(Platform.OS === "android" ? { elevation: 2 } : {}),
-  },
-  zoomTxt: { color: "#fff", fontSize: 18, fontWeight: "800" },
-  locateBtn: {
-    marginLeft: 10,
-    backgroundColor: "rgba(37, 99, 235, 0.92)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    ...(Platform.OS === "android" ? { elevation: 2 } : {}),
-  },
-  locateTxt: { color: "#fff", fontSize: 13, fontWeight: "900" },
-
-  dropdownWrap: { marginLeft: "auto", position: "relative", ...(Platform.OS === "android" ? { elevation: 2 } : {}) },
-  dropdownBtn: { backgroundColor: "rgba(0,0,0,0.65)", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  dropdownTxt: { color: "#fff", fontWeight: "800" },
-  dropdownMenu: {
-    position: "absolute",
-    top: 44,
-    right: 0,
-    backgroundColor: "#111",
-    borderRadius: 10,
-    overflow: "hidden",
-    minWidth: 160,
-    zIndex: 100,
-    ...(Platform.OS === "android" ? { elevation: 12 } : {}),
-  },
-  dropdownItem: { paddingVertical: 10, paddingHorizontal: 12 },
-  dropdownItemActive: { backgroundColor: "#1f2937" },
-  dropdownItemTxt: { color: "#fff" },
-  dropdownItemTxtActive: { fontWeight: "800", color: "#93c5fd" },
-
-  bottomBar: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 0,
-    zIndex: 150,
-    paddingTop: 10,
-    flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-  },
+  safe:{flex:1,backgroundColor:"#fff"},map:{flex:1},header:{position:"absolute",zIndex:20,top:0,left:0,right:0,backgroundColor:"rgba(255,255,255,.96)",paddingHorizontal:12,paddingBottom:9,flexDirection:"row",alignItems:"center",gap:10},headerButton:{width:42,height:42,borderRadius:21,backgroundColor:"#F1F5F9",alignItems:"center",justifyContent:"center"},headerButtonText:{fontSize:28,fontWeight:"900"},title:{fontSize:18,fontWeight:"900",color:"#0F172A"},subtitle:{fontSize:12,fontWeight:"700",color:"#64748B",marginTop:2},undo:{padding:9},undoText:{fontWeight:"900",color:"#2563EB"},panel:{position:"absolute",left:12,right:12,zIndex:30,backgroundColor:"rgba(255,255,255,.97)",borderRadius:20,padding:12,borderWidth:1,borderColor:"#CBD5E1"},modes:{flexDirection:"row",gap:7},mode:{flex:1,minHeight:38,borderRadius:11,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},modeActive:{backgroundColor:"#0F172A",borderColor:"#0F172A"},modeText:{fontWeight:"900",color:"#64748B"},modeTextActive:{color:"#fff"},help:{color:"#64748B",fontWeight:"700",fontSize:12,marginTop:9},radiusRow:{flexDirection:"row",flexWrap:"wrap",gap:6,marginTop:9},radius:{paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:"#F1F5F9"},radiusActive:{backgroundColor:"#DBEAFE"},radiusText:{fontWeight:"800",fontSize:11,color:"#475569"},radiusTextActive:{color:"#1D4ED8"},actions:{flexDirection:"row",gap:8,marginTop:10},secondary:{flex:1,minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center",marginTop:9},secondaryText:{fontWeight:"900",color:"#334155"},primary:{flex:1,minHeight:42,borderRadius:12,backgroundColor:"#2563EB",alignItems:"center",justifyContent:"center"},primaryText:{fontWeight:"900",color:"#fff"}
 });

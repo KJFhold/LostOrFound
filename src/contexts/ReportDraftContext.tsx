@@ -4,6 +4,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ReportType = "LOST" | "FOUND";
 
+export type SearchArea = {
+  id: string;
+  kind: "CIRCLE" | "ROUTE" | "POLYGON";
+  label?: string;
+  radiusMeters?: number;
+  points: Array<{ latitude: number; longitude: number }>;
+};
+
 export type ReportLocation = {
   latitude: number;
   longitude: number;
@@ -28,6 +36,7 @@ export type ReportDraft = {
   occurredAtISO?: string;
 
   location: ReportLocation | null;
+  searchAreas: SearchArea[];
 };
 
 const STORAGE_KEY = "@lostfound:reportDraft:v1";
@@ -44,6 +53,7 @@ const initialDraft: ReportDraft = {
   rewardNOK: "0",
   occurredAtISO: undefined,
   location: { latitude: 59.9139, longitude: 10.7522, radiusMeters: 500, confirmed: false },
+  searchAreas: [],
 };
 
 type Ctx = {

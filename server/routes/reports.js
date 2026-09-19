@@ -200,6 +200,24 @@ async function cleanupMatchesForReport(reportId) {
   return { matchIds, results };
 }
 
+function normalizeSearchAreas(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 20).map((area, index) => {
+    const kind = String(area?.kind || "CIRCLE").toUpperCase();
+    if (!["CIRCLE", "ROUTE", "POLYGON"].includes(kind)) throw new Error("INVALID_SEARCH_AREA_KIND");
+    const points = Array.isArray(area?.points) ? area.points.slice(0, 100).map((point) => {
+      const latitude = Number(point?.latitude);
+      const longitude = Number(point?.longitude);
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error("INVALID_SEARCH_AREA_POINT");
+      return { latitude, longitude };
+    }) : [];
+    if (kind === "CIRCLE" && points.length !== 1) throw new Error("CIRCLE_REQUIRES_ONE_POINT");
+    if (kind === "ROUTE" && points.length < 2) throw new Error("ROUTE_REQUIRES_TWO_POINTS");
+    if (kind === "POLYGON" && points.length < 3) throw new Error("POLYGON_REQUIRES_THREE_POINTS");
+    return { id: String(area?.id || `area_${index + 1}`).slice(0, 100), kind, radiusMeters: kind === "POLYGON" ? null : safeInt(area?.radiusMeters, 500, 10, 100000), points };
+  });
+}
+
 function normalizeReportPatch(body) {
   const input = body || {};
   const patch = {};
@@ -220,6 +238,7 @@ function normalizeReportPatch(body) {
   if ("search_radius_m" in input) patch.search_radius_m = toIntegerOrNull(input.search_radius_m);
   if ("area_radius_m" in input) patch.area_radius_m = toIntegerOrNull(input.area_radius_m);
   if ("location_radius_m" in input) patch.location_radius_m = toIntegerOrNull(input.location_radius_m);
+  if ("search_areas" in input) patch.search_areas = normalizeSearchAreas(input.search_areas);
 
   // Never allow these to be changed by client PATCH.
   delete patch.id;
@@ -243,7 +262,7 @@ function changed(a, b) {
 }
 
 function detectCriticalChanges(existing, patch) {
-  const criticalFields = ["category", "subcategory_key", "subcategory_custom", "occurred_at", "lat", "lng", "radius_m", "search_radius_m", "area_radius_m", "location_radius_m"];
+  const criticalFields = ["category", "subcategory_key", "subcategory_custom", "occurred_at", "lat", "lng", "radius_m", "search_radius_m", "area_radius_m", "location_radius_m", "search_areas"];
   const changedFields = [];
   const criticalChangedFields = [];
 
@@ -298,6 +317,7 @@ router.post("/", requireUser, async (req, res) => {
       search_radius_m = null,
       area_radius_m = null,
       location_radius_m = null,
+      search_areas = [],
       test_override_weekly_limit = false,
       client_request_id = null,
     } = req.body || {};
@@ -374,6 +394,7 @@ router.post("/", requireUser, async (req, res) => {
       search_radius_m: toIntegerOrNull(search_radius_m),
       area_radius_m: toIntegerOrNull(area_radius_m),
       location_radius_m: toIntegerOrNull(location_radius_m),
+      search_areas: normalizeSearchAreas(search_areas),
     };
 
     const { data, error } = await supaAdmin

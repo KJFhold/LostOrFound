@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MapView, { Circle, Marker, MapPressEvent, Polygon, Polyline, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +27,8 @@ export default function MapPickerScreen() {
 
   const selectedArea = areas.find((area) => area.id === selectedAreaId) ?? null;
   const atLimit = areas.length >= MAX_SEARCH_AREAS;
+  const editableRadius = selectedArea?.kind === "CIRCLE" || selectedArea?.kind === "ROUTE";
+  const displayedRadius = editableRadius ? selectedArea?.radiusMeters ?? radius : radius;
 
   const initialRegion = useMemo<Region>(() => ({
     latitude: draft.location?.latitude ?? areas[0]?.points[0]?.latitude ?? 59.9139,
@@ -42,17 +44,42 @@ export default function MapPickerScreen() {
       : "Slett et eksisterende sted, en rute eller et område før du legger til et nytt."
   );
 
+  const fitArea = (area: SearchArea) => {
+    if (!area.points?.length) return;
+    requestAnimationFrame(() => {
+      if (area.kind === "CIRCLE") {
+        const center = area.points[0];
+        const delta = Math.max(0.006, Math.min(1.2, Number(area.radiusMeters || 500) / 25000));
+        mapRef.current?.animateToRegion({ ...center, latitudeDelta: delta, longitudeDelta: delta }, 250);
+      } else {
+        mapRef.current?.fitToCoordinates(area.points, { edgePadding: { top: 100, right: 70, bottom: 310, left: 70 }, animated: true });
+      }
+    });
+  };
   const selectArea = (id: string) => {
+    const area = areas.find((item) => item.id === id);
+    if (!area) return;
     setSelectedAreaId(id);
     setWorkingPoints([]);
+    if (area.kind !== "POLYGON") setRadius(area.radiusMeters ?? 500);
+    fitArea(area);
+  };
+  const stopAndSelect = (event: any, id: string) => {
+    event?.stopPropagation?.();
+    selectArea(id);
   };
 
   const onMapPress = (event: MapPressEvent) => {
-    setSelectedAreaId(null);
+    if (selectedAreaId) {
+      setSelectedAreaId(null);
+      return;
+    }
     const point = event.nativeEvent.coordinate;
     if (mode === "CIRCLE") {
       if (atLimit) return limitAlert();
-      setAreas((current) => [...current, { id: uid(), kind: "CIRCLE", radiusMeters: radius, points: [point] }]);
+      const newArea: SearchArea = { id: uid(), kind: "CIRCLE", radiusMeters: radius, points: [point] };
+      setAreas((current) => [...current, newArea]);
+      setSelectedAreaId(newArea.id);
     } else {
       if (atLimit && workingPoints.length === 0) return limitAlert();
       setWorkingPoints((current) => [...current, point]);
@@ -69,14 +96,22 @@ export default function MapPickerScreen() {
       );
       return;
     }
-    setAreas((current) => [...current, { id: uid(), kind: mode, radiusMeters: mode === "ROUTE" ? radius : undefined, points: workingPoints }]);
+    const newArea: SearchArea = { id: uid(), kind: mode, radiusMeters: mode === "ROUTE" ? radius : undefined, points: workingPoints };
+    setAreas((current) => [...current, newArea]);
     setWorkingPoints([]);
+    setSelectedAreaId(newArea.id);
   };
 
   const undo = () => {
-    setSelectedAreaId(null);
-    if (workingPoints.length) setWorkingPoints((points) => points.slice(0, -1));
-    else setAreas((current) => current.slice(0, -1));
+    if (workingPoints.length) {
+      setWorkingPoints((points) => points.slice(0, -1));
+      return;
+    }
+    if (selectedAreaId) {
+      setSelectedAreaId(null);
+      return;
+    }
+    setAreas((current) => current.slice(0, -1));
   };
 
   const deleteSelected = () => {
@@ -131,14 +166,14 @@ export default function MapPickerScreen() {
       return (
         <React.Fragment key={area.id}>
           <Circle center={area.points[0]} radius={area.radiusMeters || 500} strokeWidth={selected ? 4 : 2} strokeColor={stroke} fillColor={selected ? "rgba(245,158,11,0.24)" : "rgba(37,99,235,0.18)"} />
-          <Marker coordinate={area.points[0]} pinColor={selected ? "#F59E0B" : "#DC2626"} onPress={() => selectArea(area.id)} />
+          <Marker coordinate={area.points[0]} pinColor={selected ? "#F59E0B" : "#DC2626"} onPress={(event) => stopAndSelect(event, area.id)} />
         </React.Fragment>
       );
     }
     if (area.kind === "ROUTE") {
-      return <Polyline key={area.id} coordinates={area.points} strokeWidth={selected ? 12 : 8} strokeColor={stroke} tappable onPress={() => selectArea(area.id)} />;
+      return <Polyline key={area.id} coordinates={area.points} strokeWidth={selected ? 12 : 8} strokeColor={stroke} tappable onPress={(event) => stopAndSelect(event, area.id)} />;
     }
-    return <Polygon key={area.id} coordinates={area.points} strokeWidth={selected ? 4 : 2} strokeColor={stroke} fillColor={selected ? "rgba(245,158,11,0.24)" : "rgba(124,58,237,0.18)"} tappable onPress={() => selectArea(area.id)} />;
+    return <Polygon key={area.id} coordinates={area.points} strokeWidth={selected ? 4 : 2} strokeColor={stroke} fillColor={selected ? "rgba(245,158,11,0.24)" : "rgba(124,58,237,0.18)"} tappable onPress={(event) => stopAndSelect(event, area.id)} />;
   };
 
   return (
@@ -160,11 +195,29 @@ export default function MapPickerScreen() {
       </MapView>
 
       <View style={[styles.panel, { bottom: insets.bottom + 12 }]}>
+        {areas.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaList}>
+            {areas.map((area, index) => {
+              const selected = area.id === selectedAreaId;
+              const detail = area.kind === "POLYGON"
+                ? `${area.points.length} ${language === "en" ? "points" : "punkter"}`
+                : area.kind === "ROUTE"
+                  ? `${area.radiusMeters || 500} m ${language === "en" ? "each side" : "hver side"}`
+                  : `${area.radiusMeters || 500} m`;
+              return (
+                <Pressable key={area.id} onPress={() => selectArea(area.id)} style={[styles.areaCard, selected && styles.areaCardSelected]}>
+                  <Text style={[styles.areaNumber, selected && styles.areaNumberSelected]}>{index + 1}</Text>
+                  <View><Text style={[styles.areaTitle, selected && styles.areaTitleSelected]}>{area.kind === "CIRCLE" ? (language === "en" ? "Place" : "Sted") : area.kind === "ROUTE" ? (language === "en" ? "Route" : "Rute") : (language === "en" ? "Area" : "Område")}</Text><Text style={styles.areaDetail}>{detail}</Text></View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
         {selectedArea ? (
           <View style={styles.selectedBar}>
             <View style={{ flex: 1 }}>
               <Text style={styles.selectedTitle}>{language === "en" ? "Selected" : "Valgt"}: {selectedArea.kind}</Text>
-              <Text style={styles.selectedText}>{language === "en" ? "Tap Delete to remove this shape." : "Trykk Slett for å fjerne denne formen."}</Text>
+              <Text style={styles.selectedText}>{language === "en" ? "Adjust the size or delete this search area." : "Juster størrelsen eller slett dette søkeområdet."}</Text>
             </View>
             <Pressable onPress={deleteSelected} style={styles.deleteButton}><Text style={styles.deleteText}>{language === "en" ? "Delete" : "Slett"}</Text></Pressable>
           </View>
@@ -177,11 +230,16 @@ export default function MapPickerScreen() {
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.help}>{atLimit ? (language === "en" ? "Maximum reached. Select a shape on the map to delete it." : "Maksgrensen er nådd. Velg en form på kartet for å slette den.") : mode === "CIRCLE" ? (language === "en" ? "Tap up to three possible places." : "Trykk på opptil tre mulige steder.") : (language === "en" ? "Tap points in order, then add the shape." : "Trykk punkter i rekkefølge, og legg deretter til formen.")}</Text>
+            <Text style={styles.help}>{atLimit ? (language === "en" ? "Maximum reached. Select an area in the list above to edit or delete it." : "Maksgrensen er nådd. Velg et område i listen over for å redigere eller slette det.") : mode === "CIRCLE" ? (language === "en" ? "Tap up to three possible places." : "Trykk på opptil tre mulige steder.") : (language === "en" ? "Tap points in order, then add the shape." : "Trykk punkter i rekkefølge, og legg deretter til formen.")}</Text>
           </>
         )}
 
-        <View style={styles.radiusRow}>{RADIUS_OPTIONS.map((m) => <Pressable key={m} onPress={() => changeSelectedRadius(m)} style={[styles.radius, radius === m && styles.radiusActive]}><Text style={[styles.radiusText, radius === m && styles.radiusTextActive]}>{m >= 1000 ? `${m / 1000} km` : `${m} m`}</Text></Pressable>)}</View>
+        {(editableRadius || (!selectedArea && mode !== "POLYGON")) && (
+          <>
+            <View style={styles.radiusRow}>{RADIUS_OPTIONS.map((m) => <Pressable key={m} onPress={() => changeSelectedRadius(m)} style={[styles.radius, displayedRadius === m && styles.radiusActive]}><Text style={[styles.radiusText, displayedRadius === m && styles.radiusTextActive]}>{m >= 1000 ? `${m / 1000} km` : `${m} m`}</Text></Pressable>)}</View>
+            <Text style={styles.radiusHelp}>{selectedArea?.kind === "ROUTE" ? (language === "en" ? `${displayedRadius} m on each side of the route, approximately ${Number(displayedRadius) * 2} m total width.` : `${displayedRadius} m på hver side av ruten, omtrent ${Number(displayedRadius) * 2} m total bredde.`) : selectedArea?.kind === "CIRCLE" ? (language === "en" ? `Radius from the selected point: ${displayedRadius} m.` : `Radius fra valgt sted: ${displayedRadius} m.`) : mode === "ROUTE" ? (language === "en" ? `${radius} m on each side of the new route.` : `${radius} m på hver side av den nye ruten.`) : (language === "en" ? `Radius for the new place: ${radius} m.` : `Radius for nytt sted: ${radius} m.`)}</Text>
+          </>
+        )}
         {!selectedArea && mode !== "CIRCLE" && <Pressable onPress={addWorkingArea} disabled={atLimit} style={[styles.secondaryFull, atLimit && styles.disabled]}><Text style={styles.secondaryText}>{language === "en" ? "Add drawn shape" : "Legg til tegnet form"}</Text></Pressable>}
         <View style={styles.actions}><Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : (language === "en" ? "My location" : "Min posisjon")}</Text></Pressable><Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{language === "en" ? "Confirm areas" : "Bekreft områder"}</Text></Pressable></View>
       </View>
@@ -190,5 +248,5 @@ export default function MapPickerScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe:{flex:1,backgroundColor:"#fff"},map:{flex:1},header:{position:"absolute",zIndex:20,top:0,left:0,right:0,backgroundColor:"rgba(255,255,255,.96)",paddingHorizontal:12,paddingBottom:9,flexDirection:"row",alignItems:"center",gap:10},headerButton:{width:42,height:42,borderRadius:21,backgroundColor:"#F1F5F9",alignItems:"center",justifyContent:"center"},headerButtonText:{fontSize:28,fontWeight:"900"},title:{fontSize:18,fontWeight:"900",color:"#0F172A"},subtitle:{fontSize:12,fontWeight:"700",color:"#64748B",marginTop:2},undo:{padding:9},undoText:{fontWeight:"900",color:"#2563EB"},panel:{position:"absolute",left:12,right:12,zIndex:30,backgroundColor:"rgba(255,255,255,.97)",borderRadius:20,padding:12,borderWidth:1,borderColor:"#CBD5E1"},modes:{flexDirection:"row",gap:7},mode:{flex:1,minHeight:38,borderRadius:11,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},modeActive:{backgroundColor:"#0F172A",borderColor:"#0F172A"},modeText:{fontWeight:"900",color:"#64748B"},modeTextActive:{color:"#fff"},help:{color:"#64748B",fontWeight:"700",fontSize:12,marginTop:9},radiusRow:{flexDirection:"row",flexWrap:"wrap",gap:6,marginTop:9},radius:{paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:"#F1F5F9"},radiusActive:{backgroundColor:"#DBEAFE"},radiusText:{fontWeight:"800",fontSize:11,color:"#475569"},radiusTextActive:{color:"#1D4ED8"},actions:{flexDirection:"row",gap:8,marginTop:10},secondary:{flex:1,minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},secondaryFull:{minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center",marginTop:9},secondaryText:{fontWeight:"900",color:"#334155"},primary:{flex:1,minHeight:42,borderRadius:12,backgroundColor:"#2563EB",alignItems:"center",justifyContent:"center"},primaryText:{fontWeight:"900",color:"#fff"},disabled:{opacity:.4},selectedBar:{flexDirection:"row",alignItems:"center",gap:10,padding:10,borderRadius:13,backgroundColor:"#FFFBEB",borderWidth:1,borderColor:"#FCD34D"},selectedTitle:{fontWeight:"900",color:"#92400E"},selectedText:{fontWeight:"600",fontSize:12,color:"#92400E",marginTop:2},deleteButton:{minHeight:40,paddingHorizontal:14,borderRadius:11,backgroundColor:"#B91C1C",alignItems:"center",justifyContent:"center"},deleteText:{color:"#fff",fontWeight:"900"}
+  safe:{flex:1,backgroundColor:"#fff"},map:{flex:1},header:{position:"absolute",zIndex:20,top:0,left:0,right:0,backgroundColor:"rgba(255,255,255,.96)",paddingHorizontal:12,paddingBottom:9,flexDirection:"row",alignItems:"center",gap:10},headerButton:{width:42,height:42,borderRadius:21,backgroundColor:"#F1F5F9",alignItems:"center",justifyContent:"center"},headerButtonText:{fontSize:28,fontWeight:"900"},title:{fontSize:18,fontWeight:"900",color:"#0F172A"},subtitle:{fontSize:12,fontWeight:"700",color:"#64748B",marginTop:2},undo:{padding:9},undoText:{fontWeight:"900",color:"#2563EB"},panel:{position:"absolute",left:12,right:12,zIndex:30,backgroundColor:"rgba(255,255,255,.97)",borderRadius:20,padding:12,borderWidth:1,borderColor:"#CBD5E1"},areaList:{gap:7,paddingBottom:9},areaCard:{minWidth:112,flexDirection:"row",alignItems:"center",gap:8,padding:8,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",backgroundColor:"#F8FAFC"},areaCardSelected:{borderColor:"#F59E0B",backgroundColor:"#FFFBEB"},areaNumber:{width:26,height:26,borderRadius:13,textAlign:"center",lineHeight:26,overflow:"hidden",backgroundColor:"#E2E8F0",color:"#334155",fontWeight:"900"},areaNumberSelected:{backgroundColor:"#F59E0B",color:"#fff"},areaTitle:{fontWeight:"900",fontSize:12,color:"#0F172A"},areaTitleSelected:{color:"#92400E"},areaDetail:{fontWeight:"700",fontSize:10,color:"#64748B",marginTop:2},modes:{flexDirection:"row",gap:7},mode:{flex:1,minHeight:38,borderRadius:11,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},modeActive:{backgroundColor:"#0F172A",borderColor:"#0F172A"},modeText:{fontWeight:"900",color:"#64748B"},modeTextActive:{color:"#fff"},help:{color:"#64748B",fontWeight:"700",fontSize:12,marginTop:9},radiusRow:{flexDirection:"row",flexWrap:"wrap",gap:6,marginTop:9},radius:{paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:"#F1F5F9"},radiusActive:{backgroundColor:"#DBEAFE"},radiusText:{fontWeight:"800",fontSize:11,color:"#475569"},radiusTextActive:{color:"#1D4ED8"},radiusHelp:{color:"#475569",fontWeight:"700",fontSize:11,marginTop:7},actions:{flexDirection:"row",gap:8,marginTop:10},secondary:{flex:1,minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},secondaryFull:{minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center",marginTop:9},secondaryText:{fontWeight:"900",color:"#334155"},primary:{flex:1,minHeight:42,borderRadius:12,backgroundColor:"#2563EB",alignItems:"center",justifyContent:"center"},primaryText:{fontWeight:"900",color:"#fff"},disabled:{opacity:.4},selectedBar:{flexDirection:"row",alignItems:"center",gap:10,padding:10,borderRadius:13,backgroundColor:"#FFFBEB",borderWidth:1,borderColor:"#FCD34D"},selectedTitle:{fontWeight:"900",color:"#92400E"},selectedText:{fontWeight:"600",fontSize:12,color:"#92400E",marginTop:2},deleteButton:{minHeight:40,paddingHorizontal:14,borderRadius:11,backgroundColor:"#B91C1C",alignItems:"center",justifyContent:"center"},deleteText:{color:"#fff",fontWeight:"900"}
 });

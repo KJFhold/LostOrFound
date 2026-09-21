@@ -682,7 +682,7 @@ const subcategoryLabel = useMemo(() => {
   };  
   const openMap = () => {  
     closeMenus();  
-    router.push("/(report)/map");  
+    router.push({ pathname: "/(report)/map", params: { reportType: type } });  
   };  
   const scrollToCategorySection = () => {  
     requestAnimationFrame(() => {  

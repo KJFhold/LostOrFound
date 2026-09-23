@@ -154,6 +154,15 @@ try {
   console.warn("[BOOT] /report-commerce NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /push ----
+try {
+  const pushRoutes = require("./routes/push");
+  app.use("/push", pushRoutes);
+  console.log("[BOOT] Mounted /push routes");
+} catch (e) {
+  console.warn("[BOOT] /push NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

@@ -80,6 +80,13 @@
           "project": "lost-or-found-app",
           "organization": "lost-or-found"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2563EB"
+        }
       ]
     ]
   }

@@ -36,7 +36,6 @@ async function authHeaders() {
 }
 
 export async function registerPushInstallation(language: "no" | "en") {
-  if (!Constants.isDevice) throw new Error("PHYSICAL_DEVICE_REQUIRED");
   const existing = await Notifications.getPermissionsAsync();
   let status = existing.status;
   if (status !== "granted") status = (await Notifications.requestPermissionsAsync()).status;

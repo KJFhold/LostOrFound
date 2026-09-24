@@ -172,6 +172,15 @@ try {
   console.warn("[BOOT] /alert-areas NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /geo-alert-delivery ----
+try {
+  const geoAlertDeliveryRoutes = require("./routes/geoAlertDelivery");
+  app.use("/geo-alert-delivery", geoAlertDeliveryRoutes);
+  console.log("[BOOT] Mounted /geo-alert-delivery routes");
+} catch (e) {
+  console.warn("[BOOT] /geo-alert-delivery NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

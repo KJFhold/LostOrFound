@@ -163,6 +163,15 @@ try {
   console.warn("[BOOT] /push NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /alert-areas ----
+try {
+  const alertAreasRoutes = require("./routes/alertAreas");
+  app.use("/alert-areas", alertAreasRoutes);
+  console.log("[BOOT] Mounted /alert-areas routes");
+} catch (e) {
+  console.warn("[BOOT] /alert-areas NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

@@ -22,10 +22,13 @@ router.post("/register", requireUser, async (req, res) => {
     if (!['ios','android'].includes(platform)) return res.status(400).json({ error: "INVALID_PLATFORM" });
 
     // Et token kan flyttes mellom innlogginger på samme installasjon. Deaktiver gammel binding først.
-    await supaAdmin.from("push_installations")
-      .update({ active: false, disabled_at: new Date().toISOString(), disabled_reason: "TOKEN_REASSIGNED", updated_at: new Date().toISOString() })
-      .eq("expo_push_token", expoPushToken)
-      .neq("user_id", userId);
+    const { error: removeOldTokenError } = await supaAdmin
+  .from("push_installations")
+  .delete()
+  .eq("expo_push_token", expoPushToken)
+  .neq("user_id", userId);
+
+if (removeOldTokenError) throw removeOldTokenError;
 
     const row = {
       user_id: userId,

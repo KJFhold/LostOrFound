@@ -141,6 +141,18 @@ export default function ReportDetailsScreen() {
               <Info label={language === "en" ? "Radius" : "Radius"} value={data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m ? `${data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m} m` : null} />
             </View>
 
+            {String(data.report.type || "").toUpperCase() === "LOST" && data.report.lat != null && data.report.lng != null && (
+              <View style={styles.geoAlertCta}>
+                <Text style={styles.geoAlertCtaTitle}>{language === "en" ? "Notify people in the area" : "Varsle personer i området"}</Text>
+                <Text style={styles.geoAlertCtaBody}>{language === "en" ? "Preview coverage, qualified recipients and the current test price before any purchase." : "Forhåndsvis dekningsområde, kvalifiserte mottakere og aktuell testpris før eventuelt kjøp."}</Text>
+                <Pressable
+                  style={styles.geoAlertCtaButton}
+                  onPress={() => router.push({ pathname: "/geo-alert-create", params: { reportId: data.report.id, title: data.report.title || "", lat: String(data.report.lat), lng: String(data.report.lng) } })}
+                >
+                  <Text style={styles.geoAlertCtaButtonText}>{language === "en" ? "Preview geo alert" : "Forhåndsvis geovarsel"}</Text>
+                </Pressable>
+              </View>
+            )}
             <View style={styles.card}>
               <Text style={styles.h2}>{language === "en" ? "Paid additions" : "Betalte tillegg"}</Text>
               {data.entitlements.length === 0 ? <Text style={styles.muted}>{language === "en" ? "No paid additions." : "Ingen betalte tillegg."}</Text> : data.entitlements.map((item) => (
@@ -229,6 +241,11 @@ const styles = StyleSheet.create({
   match: { marginTop: 12, padding: 13, borderRadius: 13, borderWidth: 1, borderColor: "#C7D2FE", backgroundColor: "#EEF2FF" },
   matchTitle: { color: theme.colors.primary, fontWeight: "900" },
   matchMeta: { color: theme.colors.text, fontWeight: "600", marginTop: 4 },
+  geoAlertCta: { padding: 16, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#93C5FD", borderRadius: 18, marginBottom: 12 },
+  geoAlertCtaTitle: { color: theme.colors.text, fontWeight: "900", fontSize: 17 },
+  geoAlertCtaBody: { color: theme.colors.muted, fontWeight: "700", marginTop: 6, lineHeight: 19 },
+  geoAlertCtaButton: { minHeight: 46, marginTop: 13, borderRadius: 13, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
+  geoAlertCtaButtonText: { color: "#FFFFFF", fontWeight: "900" },
   editButton: { minHeight: 48, backgroundColor: theme.colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   editText: { color: "#FFFFFF", fontWeight: "900" },
 });

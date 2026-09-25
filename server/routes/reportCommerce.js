@@ -181,14 +181,17 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
 
     if (order.product_code.startsWith("GEO_ALERT_TIER_")) {
       const g = order.request_payload?.geoAlert || {};
-      await supaAdmin.from("geo_alert_campaigns").insert({
+      if (report.lat == null || report.lng == null) return res.status(400).json({ error: "GEO_ALERT_REPORT_LOCATION_REQUIRED" });
+      const campaignPoint = "POINT(" + Number(report.lng) + " " + Number(report.lat) + ")";
+      const { error: campaignError } = await supaAdmin.from("geo_alert_campaigns").insert({
         user_id: userId, report_id: order.report_id, order_id: order.id, status: "ACTIVE",
-        geometry_type: String(g.geometryType || "CIRCLE").toUpperCase(), radius_m: g.radiusM || null,
+        geometry: campaignPoint, radius_m: Number(g.radiusM || 1500),
         area_sq_km: Number(g.areaSqKm || 0.01), population_density_band: String(g.populationDensityBand || "LOW").toUpperCase(),
         estimated_eligible_users: Number(g.estimatedEligibleUsers || 0), duration_hours: Number(g.durationHours || 72),
         reminder_count: Number(g.reminderCount || 0), price_tier: order.product_code,
         price_snapshot: order.price_snapshot || {}, starts_at: now.toISOString(), ends_at: periodEnd.toISOString(), activated_at: now.toISOString(),
       });
+      if (campaignError) return res.status(400).json({ error: campaignError.message });
     }
 
     const { data: updatedOrder, error: uErr } = await supaAdmin.from("report_orders").update({

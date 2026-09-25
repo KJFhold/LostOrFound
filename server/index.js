@@ -181,6 +181,15 @@ try {
   console.warn("[BOOT] /geo-alert-delivery NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /geo-alert-preview ----
+try {
+  const geoAlertPreviewRoutes = require("./routes/geoAlertPreview");
+  app.use("/geo-alert-preview", geoAlertPreviewRoutes);
+  console.log("[BOOT] Mounted /geo-alert-preview routes");
+} catch (e) {
+  console.warn("[BOOT] /geo-alert-preview NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

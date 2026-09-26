@@ -210,7 +210,7 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
       const campaignPoint = "SRID=4326;POINT(" + Number(report.lng) + " " + Number(report.lat) + ")";
       const { error: campaignError } = await supaAdmin.from("geo_alert_campaigns").insert({
         user_id: userId, report_id: order.report_id, order_id: order.id, status: "ACTIVE",
-        geometry: campaignPoint, radius_m: Number(g.radiusM || 1500),
+        geometry_type: "CIRCLE", geometry: campaignPoint, radius_m: Number(g.radiusM || 1500),
         area_sq_km: Number(g.areaSqKm || 0.01), population_density_band: String(g.populationDensityBand || "LOW").toUpperCase(),
         estimated_eligible_users: Number(g.estimatedEligibleUsers || 0), duration_hours: GEO_ALERT_DURATION_HOURS,
         reminder_count: GEO_ALERT_REMINDER_COUNT, price_tier: order.product_code,

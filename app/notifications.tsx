@@ -95,6 +95,7 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Notif[]>([]);
   const [busy, setBusy] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<"mine" | "nearby">("mine");
 
   const getToken = useCallback(async () => {
     const { data: sess } = await supabase.auth.getSession();
@@ -252,8 +253,31 @@ export default function NotificationsScreen() {
     [router, markRead, resolveNotif, language]
   );
 
-  const unreadCount = useMemo(() => items.filter((x) => !x.read_at).length, [items]);
-  const missingCount = useMemo(() => items.filter((x) => x.target_status === "missing").length, [items]);
+  const isNearbyNotification = useCallback((item: Notif) => {
+    const type = String(item.type || "").toUpperCase();
+    return type === "AREA_ALERT" || type === "GEO_ALERT" || String(item.entity_type || "").toLowerCase() === "area_alert_campaign";
+  }, []);
+  const mineItems = useMemo(() => items.filter((item) => !isNearbyNotification(item)), [items, isNearbyNotification]);
+  const nearbyItems = useMemo(() => items.filter(isNearbyNotification), [items, isNearbyNotification]);
+  const visibleItems = selectedTab === "nearby" ? nearbyItems : mineItems;
+  const mineUnread = useMemo(() => mineItems.filter((x) => !x.read_at).length, [mineItems]);
+  const nearbyUnread = useMemo(() => nearbyItems.filter((x) => !x.read_at).length, [nearbyItems]);
+  const unreadCount = mineUnread + nearbyUnread;
+  const missingCount = useMemo(() => mineItems.filter((x) => x.target_status === "missing").length, [mineItems]);
+
+  const markVisibleRead = useCallback(async () => {
+    const unreadIds = visibleItems.filter((item) => !item.read_at).map((item) => item.id);
+    if (!unreadIds.length) return;
+    setBusy(true);
+    try {
+      await Promise.all(unreadIds.map((notificationId) => markRead(notificationId)));
+      const visibleSet = new Set(unreadIds);
+      const readAt = new Date().toISOString();
+      setItems((prev) => prev.map((item) => visibleSet.has(item.id) ? { ...item, read_at: item.read_at || readAt } : item));
+    } finally {
+      setBusy(false);
+    }
+  }, [visibleItems, markRead]);
 
   return (
     <>
@@ -266,18 +290,26 @@ export default function NotificationsScreen() {
           right={<AuthHeaderAction />}
         />
 
+        <View style={styles.tabs}>
+          <Pressable style={[styles.tab, selectedTab === "mine" && styles.tabActive]} onPress={() => setSelectedTab("mine")}>
+            <Text style={[styles.tabText, selectedTab === "mine" && styles.tabTextActive]}>{language === "en" ? "My cases" : "Mine saker"}{mineUnread ? ` ${mineUnread}` : ""}</Text>
+          </Pressable>
+          <Pressable style={[styles.tab, selectedTab === "nearby" && styles.tabActive]} onPress={() => setSelectedTab("nearby")}>
+            <Text style={[styles.tabText, selectedTab === "nearby" && styles.tabTextActive]}>{language === "en" ? "Nearby" : "I nærheten"}{nearbyUnread ? ` ${nearbyUnread}` : ""}</Text>
+          </Pressable>
+        </View>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator />
             <Text style={styles.muted}>{language === "en" ? "Loading…" : "Laster…"}</Text>
           </View>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.muted}>{language === "en" ? "No notifications yet." : "Ingen varsler ennå."}</Text>
+            <Text style={styles.muted}>{selectedTab === "nearby" ? (language === "en" ? "No nearby alerts yet." : "Ingen varsler i nærheten ennå.") : (language === "en" ? "No case notifications yet." : "Ingen varsler for egne saker ennå.")}</Text>
           </View>
         ) : (
           <FlatList
-            data={items}
+            data={visibleItems}
             keyExtractor={(x) => x.id}
             contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
             renderItem={({ item }) => {
@@ -332,28 +364,18 @@ export default function NotificationsScreen() {
             <Text style={styles.footerTxt}>{language === "en" ? "Refresh" : "Oppdater"}</Text>
           </Pressable>
 
-          <Pressable style={[styles.footerBtn, missingCount > 0 ? styles.footerBtnDanger : styles.footerBtnDisabled]} onPress={deleteMissingNotifications} disabled={busy || missingCount === 0}>
+          {selectedTab === "mine" && <Pressable style={[styles.footerBtn, missingCount > 0 ? styles.footerBtnDanger : styles.footerBtnDisabled]} onPress={deleteMissingNotifications} disabled={busy || missingCount === 0}>
             <Text style={[styles.footerTxt, missingCount > 0 ? styles.footerTxtDanger : styles.footerTxtDisabled]}>
               {language === "en" ? "Delete unavailable" : "Slett utilgjengelige"}
             </Text>
-          </Pressable>
+          </Pressable>}
 
           <Pressable
             style={[styles.footerBtn, styles.footerBtnPrimary]}
             disabled={busy}
-            onPress={async () => {
-              try {
-                const token = await getToken();
-                if (!token) return;
-                await fetch(`${API_BASE_URL}/notifications/read-all`, {
-                  method: "POST",
-                  headers: { Authorization: `Bearer ${token}` },
-                });
-                setItems((prev) => prev.map((x) => ({ ...x, read_at: x.read_at ?? new Date().toISOString() })));
-              } catch {}
-            }}
+            onPress={markVisibleRead}
           >
-            <Text style={[styles.footerTxt, styles.footerTxtPrimary]}>{language === "en" ? "Mark read" : "Marker lest"}</Text>
+            <Text style={[styles.footerTxt, styles.footerTxtPrimary]}>{language === "en" ? "Mark tab read" : "Marker fanen lest"}</Text>
           </Pressable>
         </View>
       </View>
@@ -365,6 +387,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   muted: { marginTop: 8, color: theme.colors.muted, fontWeight: "700" },
+  tabs: { flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4 },
+  tab: { flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  tabActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  tabText: { color: theme.colors.text, fontWeight: "900", fontSize: 13 },
+  tabTextActive: { color: "#FFFFFF" },
   card: {
     padding: 12,
     borderWidth: 1,

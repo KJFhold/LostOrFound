@@ -82,7 +82,7 @@ router.post("/", requireUser, async (req, res) => {
       : `${report.title || "Gjenstanden"} kan være sett. Åpne observasjonen for detaljer.`;
     const { error: notificationError } = await supaAdmin
       .from("notifications")
-      .upsert({
+      .insert({
         user_id: report.user_id,
         type: "AREA_ALERT_OBSERVATION",
         entity_type: "observation",
@@ -90,8 +90,10 @@ router.post("/", requireUser, async (req, res) => {
         title,
         body,
         notification_key: `AREA_ALERT_OBSERVATION:${observation.id}`,
-      }, { onConflict: "notification_key" });
-    if (notificationError) throw notificationError;
+      });
+    // notification_key har ikke en generell UNIQUE-constraint i dagens database.
+    // Observasjonen er allerede idempotent via observer_user_id + client_request_id.
+    if (notificationError && notificationError.code !== "23505") throw notificationError;
 
     return res.json({ ok: true, observation });
   } catch (error) {

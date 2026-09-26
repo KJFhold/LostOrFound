@@ -8,6 +8,9 @@ const supaAdmin = supaModule?.supaAdmin || supaModule?.supabaseAdmin || supaModu
 const authModule = require("../mw/auth");
 const requireUser = authModule?.requireUser || authModule;
 const { calculateGeoAlertQuote } = require("../lib/geoAlertPricing");
+const GEO_ALERT_DURATION_HOURS = 168;
+const GEO_ALERT_REMINDER_COUNT = 0;
+const VALID_GEO_ALERT_RADII = new Set([250, 500, 1000, 1500, 3000, 5000, 10000]);
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") throw new Error("Supabase admin client unavailable");
 
@@ -79,8 +82,30 @@ router.post("/orders", requireUser, async (req, res) => {
 
     let priceSnapshot = {};
     let geoQuote = null;
+    let normalizedGeoAlert = null;
     if (productCode === "GEO_ALERT") {
-      geoQuote = calculateGeoAlertQuote(req.body?.geoAlert || {});
+      const requested = req.body?.geoAlert || {};
+      const radiusM = Number(requested.radiusM);
+      if (!VALID_GEO_ALERT_RADII.has(radiusM)) return res.status(400).json({ error: "INVALID_RADIUS" });
+      const populationDensityBand = String(requested.populationDensityBand || "LOW").toUpperCase();
+      const { data: previewRows, error: previewError } = await supaAdmin.rpc("preview_geo_alert_audience", {
+        p_report_id: reportId,
+        p_user_id: userId,
+        p_radius_m: radiusM,
+      });
+      if (previewError) return res.status(400).json({ error: previewError.message });
+      const preview = Array.isArray(previewRows) ? previewRows[0] : previewRows;
+      if (!preview) return res.status(404).json({ error: "LOST_REPORT_WITH_LOCATION_NOT_FOUND" });
+      normalizedGeoAlert = {
+        radiusM,
+        areaSqKm: Number(preview.area_sq_km),
+        populationDensityBand,
+        estimatedEligibleUsers: Number(preview.eligible_users || 0),
+        estimatedEligibleInstallations: Number(preview.eligible_installations || 0),
+        durationHours: GEO_ALERT_DURATION_HOURS,
+        reminderCount: GEO_ALERT_REMINDER_COUNT,
+      };
+      geoQuote = calculateGeoAlertQuote(normalizedGeoAlert);
       productCode = geoQuote.productCode;
       priceSnapshot = geoQuote.priceSnapshot;
     }
@@ -104,7 +129,7 @@ router.post("/orders", requireUser, async (req, res) => {
         occurredPrecision: req.body?.occurredPrecision || null,
         occurredYear: req.body?.occurredYear || null,
         occurredMonth: req.body?.occurredMonth || null,
-        geoAlert: req.body?.geoAlert || null,
+        geoAlert: normalizedGeoAlert || req.body?.geoAlert || null,
       },
     };
 
@@ -151,7 +176,7 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
     } else if (order.product_code === "REPORT_REACTIVATION") {
       periodEnd = new Date(now.getTime() + 30 * 86400000);
     } else if (order.product_code.startsWith("GEO_ALERT_TIER_")) {
-      periodEnd = new Date(now.getTime() + 72 * 3600000);
+      periodEnd = new Date(now.getTime() + GEO_ALERT_DURATION_HOURS * 3600000);
     } else return res.status(400).json({ error: "UNSUPPORTED_PRODUCT" });
 
     const providerTransactionId = order.provider_transaction_id || `test_${crypto.randomUUID()}`;
@@ -182,13 +207,13 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
     if (order.product_code.startsWith("GEO_ALERT_TIER_")) {
       const g = order.request_payload?.geoAlert || {};
       if (report.lat == null || report.lng == null) return res.status(400).json({ error: "GEO_ALERT_REPORT_LOCATION_REQUIRED" });
-      const campaignPoint = "POINT(" + Number(report.lng) + " " + Number(report.lat) + ")";
+      const campaignPoint = "SRID=4326;POINT(" + Number(report.lng) + " " + Number(report.lat) + ")";
       const { error: campaignError } = await supaAdmin.from("geo_alert_campaigns").insert({
         user_id: userId, report_id: order.report_id, order_id: order.id, status: "ACTIVE",
         geometry: campaignPoint, radius_m: Number(g.radiusM || 1500),
         area_sq_km: Number(g.areaSqKm || 0.01), population_density_band: String(g.populationDensityBand || "LOW").toUpperCase(),
-        estimated_eligible_users: Number(g.estimatedEligibleUsers || 0), duration_hours: Number(g.durationHours || 72),
-        reminder_count: Number(g.reminderCount || 0), price_tier: order.product_code,
+        estimated_eligible_users: Number(g.estimatedEligibleUsers || 0), duration_hours: GEO_ALERT_DURATION_HOURS,
+        reminder_count: GEO_ALERT_REMINDER_COUNT, price_tier: order.product_code,
         price_snapshot: order.price_snapshot || {}, starts_at: now.toISOString(), ends_at: periodEnd.toISOString(), activated_at: now.toISOString(),
       });
       if (campaignError) return res.status(400).json({ error: campaignError.message });

@@ -2,7 +2,7 @@
 // In-app varsler: feed + mark as read + trygg deep link + sletting av utilgjengelige varsler.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, Alert } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { API_BASE_URL } from "../src/lib/config";
 import { theme } from "../src/ui/theme";
@@ -95,11 +95,13 @@ function invalidReasonLabel(n: Notif, language: "no" | "en") {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { language } = useI18n();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Notif[]>([]);
   const [busy, setBusy] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<"mine" | "nearby">("mine");
+  const [selectedTab, setSelectedTab] = useState<"mine" | "nearby">(params.tab === "nearby" ? "nearby" : "mine");
+  useEffect(() => { if (params.tab === "nearby") setSelectedTab("nearby"); }, [params.tab]);
 
   const getToken = useCallback(async () => {
     const { data: sess } = await supabase.auth.getSession();

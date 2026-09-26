@@ -1,11 +1,13 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Circle, Marker, MapPressEvent, Polygon, Polyline, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { useReportDraft, type SearchArea, type ReportType } from "../../src/contexts/ReportDraftContext";
 import { useI18n } from "../../src/i18n/I18nProvider";
+import { API_BASE_URL } from "../../src/lib/config";
+import { supabase } from "../../src/lib/supabase";
 
 const MAX_SEARCH_AREAS = 3;
 const RADIUS_OPTIONS = [100, 250, 500, 1000, 2000, 5000];
@@ -36,6 +38,9 @@ export default function MapPickerScreen() {
     longitude: draft.location?.longitude ?? 10.7522,
   });
   const [locating, setLocating] = useState(false);
+  const [addressQuery, setAddressQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [addressResults, setAddressResults] = useState<any[]>([]);
 
   const selectedArea = areas.find((area) => area.id === selectedAreaId) ?? null;
   const atLimit = areas.length >= MAX_SEARCH_AREAS;
@@ -162,6 +167,55 @@ export default function MapPickerScreen() {
     ));
   };
 
+  const placePoint = (point: Point) => {
+    if (isFound) {
+      setFoundPin(point);
+    } else if (selectedArea?.kind === "CIRCLE") {
+      setAreas((current) => current.map((area) => area.id === selectedArea.id ? { ...area, points: [point] } : area));
+    } else if (!atLimit) {
+      const newArea: SearchArea = { id: uid(), kind: "CIRCLE", radiusMeters: radius, points: [point] };
+      setAreas((current) => [...current, newArea]);
+      setSelectedAreaId(newArea.id);
+    } else {
+      limitAlert();
+      return;
+    }
+    mapRef.current?.animateToRegion({ ...point, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 250);
+  };
+  const searchAddress = async () => {
+    const q = addressQuery.trim();
+    if (q.length < 3) return;
+    try {
+      setSearching(true);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error(language === "en" ? "Log in to search." : "Logg inn for å søke.");
+      const url = API_BASE_URL + "/geo/search?q=" + encodeURIComponent(q) + "&language=" + encodeURIComponent(language);
+      const response = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.error || "ADDRESS_SEARCH_FAILED");
+      setAddressResults(json?.results || []);
+    } catch (e: any) {
+      Alert.alert(language === "en" ? "Address search failed" : "Adressesøket feilet", e?.message || "");
+    } finally {
+      setSearching(false);
+    }
+  };
+  const chooseAddress = (item: any) => {
+    const point = { latitude: Number(item.latitude), longitude: Number(item.longitude) };
+    placePoint(point);
+    setAddressQuery(String(item.label || ""));
+    setAddressResults([]);
+  };
+  const renderAddressSearch = () => (
+    <View style={[styles.searchBox, { top: insets.top + 66 }]}>
+      <View style={styles.searchRow}>
+        <TextInput style={styles.searchInput} value={addressQuery} onChangeText={setAddressQuery} onSubmitEditing={searchAddress} returnKeyType="search" placeholder={language === "en" ? "Search address or place" : "Søk etter adresse eller sted"} />
+        <Pressable style={styles.searchButton} onPress={searchAddress}><Text style={styles.searchButtonText}>{searching ? "…" : language === "en" ? "Search" : "Søk"}</Text></Pressable>
+      </View>
+      {addressResults.length > 0 && <View style={styles.searchResults}>{addressResults.map((item) => <Pressable key={item.id || item.label} onPress={() => chooseAddress(item)} style={styles.searchResult}><Text style={styles.searchResultText} numberOfLines={2}>{item.label}</Text></Pressable>)}</View>}
+    </View>
+  );
   const centerOnUser = async () => {
     try {
       setLocating(true);
@@ -169,8 +223,7 @@ export default function MapPickerScreen() {
       if (permission.status !== "granted") return;
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const point = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      if (isFound) setFoundPin(point);
-      mapRef.current?.animateToRegion({ ...point, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 250);
+      placePoint(point);
     } finally {
       setLocating(false);
     }
@@ -231,6 +284,7 @@ export default function MapPickerScreen() {
             <Text style={styles.subtitle}>{language === "en" ? "Place one pin where the item was found" : "Plasser én pin der gjenstanden ble funnet"}</Text>
           </View>
         </View>
+        {renderAddressSearch()}
         <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={initialRegion} onPress={onMapPress}>
           <Marker coordinate={foundPin} draggable onDragEnd={(event) => setFoundPin(event.nativeEvent.coordinate)} />
         </MapView>
@@ -255,6 +309,7 @@ export default function MapPickerScreen() {
         </View>
         <Pressable onPress={undo} style={styles.undo}><Text style={styles.undoText}>{language === "en" ? "Undo" : "Angre"}</Text></Pressable>
       </View>
+      {renderAddressSearch()}
       <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={initialRegion} onPress={onMapPress}>
         {areas.map(renderArea)}
         {workingPoints.map((point, index) => <Marker key={`working-${index}`} coordinate={point} pinColor="#F59E0B" />)}
@@ -316,5 +371,13 @@ export default function MapPickerScreen() {
 }
 
 const styles = StyleSheet.create({
+  searchBox:{position:"absolute",zIndex:40,left:12,right:12,backgroundColor:"rgba(255,255,255,.98)",borderRadius:14,padding:8,borderWidth:1,borderColor:"#CBD5E1"},
+  searchRow:{flexDirection:"row",gap:8},
+  searchInput:{flex:1,minHeight:42,borderRadius:10,borderWidth:1,borderColor:"#CBD5E1",paddingHorizontal:12,backgroundColor:"#fff"},
+  searchButton:{minWidth:64,minHeight:42,borderRadius:10,backgroundColor:"#2563EB",alignItems:"center",justifyContent:"center",paddingHorizontal:10},
+  searchButtonText:{color:"#fff",fontWeight:"900"},
+  searchResults:{marginTop:6,borderTopWidth:1,borderTopColor:"#E2E8F0"},
+  searchResult:{paddingVertical:10,paddingHorizontal:6,borderBottomWidth:1,borderBottomColor:"#E2E8F0"},
+  searchResultText:{color:"#0F172A",fontWeight:"700"},
   safe:{flex:1,backgroundColor:"#fff"},map:{flex:1},header:{position:"absolute",zIndex:20,top:0,left:0,right:0,backgroundColor:"rgba(255,255,255,.96)",paddingHorizontal:12,paddingBottom:9,flexDirection:"row",alignItems:"center",gap:10},headerButton:{width:42,height:42,borderRadius:21,backgroundColor:"#F1F5F9",alignItems:"center",justifyContent:"center"},headerButtonText:{fontSize:28,fontWeight:"900"},title:{fontSize:18,fontWeight:"900",color:"#0F172A"},subtitle:{fontSize:12,fontWeight:"700",color:"#64748B",marginTop:2},undo:{padding:9},undoText:{fontWeight:"900",color:"#2563EB"},panel:{position:"absolute",left:12,right:12,zIndex:30,backgroundColor:"rgba(255,255,255,.97)",borderRadius:20,padding:12,borderWidth:1,borderColor:"#CBD5E1"},areaList:{gap:7,paddingBottom:9},areaCard:{minWidth:112,flexDirection:"row",alignItems:"center",gap:8,padding:8,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",backgroundColor:"#F8FAFC"},areaCardSelected:{borderColor:"#F59E0B",backgroundColor:"#FFFBEB"},areaNumber:{width:26,height:26,borderRadius:13,textAlign:"center",lineHeight:26,overflow:"hidden",backgroundColor:"#E2E8F0",color:"#334155",fontWeight:"900"},areaNumberSelected:{backgroundColor:"#F59E0B",color:"#fff"},areaTitle:{fontWeight:"900",fontSize:12,color:"#0F172A"},areaTitleSelected:{color:"#92400E"},areaDetail:{fontWeight:"700",fontSize:10,color:"#64748B",marginTop:2},modes:{flexDirection:"row",gap:7},mode:{flex:1,minHeight:38,borderRadius:11,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},modeActive:{backgroundColor:"#0F172A",borderColor:"#0F172A"},modeText:{fontWeight:"900",color:"#64748B"},modeTextActive:{color:"#fff"},help:{color:"#64748B",fontWeight:"700",fontSize:12,marginTop:9},radiusRow:{flexDirection:"row",flexWrap:"wrap",gap:6,marginTop:9},radius:{paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:"#F1F5F9"},radiusActive:{backgroundColor:"#DBEAFE"},radiusText:{fontWeight:"800",fontSize:11,color:"#475569"},radiusTextActive:{color:"#1D4ED8"},radiusHelp:{color:"#475569",fontWeight:"700",fontSize:11,marginTop:7},actions:{flexDirection:"row",gap:8,marginTop:10},secondary:{flex:1,minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center"},secondaryFull:{minHeight:42,borderRadius:12,borderWidth:1,borderColor:"#CBD5E1",alignItems:"center",justifyContent:"center",marginTop:9},secondaryText:{fontWeight:"900",color:"#334155"},primary:{flex:1,minHeight:42,borderRadius:12,backgroundColor:"#2563EB",alignItems:"center",justifyContent:"center"},primaryText:{fontWeight:"900",color:"#fff"},disabled:{opacity:.4},selectedBar:{flexDirection:"row",alignItems:"center",gap:10,padding:10,borderRadius:13,backgroundColor:"#FFFBEB",borderWidth:1,borderColor:"#FCD34D"},selectedTitle:{fontWeight:"900",color:"#92400E"},selectedText:{fontWeight:"600",fontSize:12,color:"#92400E",marginTop:2},deleteButton:{minHeight:40,paddingHorizontal:14,borderRadius:11,backgroundColor:"#B91C1C",alignItems:"center",justifyContent:"center"},deleteText:{color:"#fff",fontWeight:"900"},addAnother:{minHeight:42,borderRadius:12,backgroundColor:"#E0F2FE",borderWidth:1,borderColor:"#7DD3FC",alignItems:"center",justifyContent:"center",marginTop:9},addAnotherText:{fontWeight:"900",color:"#075985"},foundHelp:{color:"#475569",fontWeight:"700",fontSize:13,lineHeight:18},
 });

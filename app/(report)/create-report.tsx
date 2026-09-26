@@ -834,7 +834,7 @@ const subcategoryLabel = useMemo(() => {
     }
   }, [language, retryImageUris, retryReportId, uploading]);
 
-  const submitRef = useRef<(options?: { testOverrideWeeklyLimit?: boolean }) => Promise<void>>(async () => {});
+  const submitRef = useRef<(options?: { testOverrideWeeklyLimit?: boolean; allowWithoutImage?: boolean }) => Promise<void>>(async () => {});
   const appendToDescription = (line: string) => {  
     const current = String((draft as any).description ?? "").trim();  
     const clean = String(line || "").trim();  
@@ -842,11 +842,11 @@ const subcategoryLabel = useMemo(() => {
     const next = current ? `${current}\n${clean}` : clean;  
     setField("description" as any, next);  
   };  
-  const onSubmit = useCallback(async (options?: { testOverrideWeeklyLimit?: boolean }) => {  
+  const onSubmit = useCallback(async (options?: { testOverrideWeeklyLimit?: boolean; allowWithoutImage?: boolean }) => {  
     console.log("[create-report] CTA pressed");  
     const log = (...args: any[]) => console.log("[create-report]", ...args);  
     if (!validate()) return;
-    if (!isEditMode && pendingImages.length === 0 && !continueWithoutImage) {
+    if (!isEditMode && pendingImages.length === 0 && !continueWithoutImage && !options?.allowWithoutImage) {
       setPhotoPromptOpen(true);
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true }));
       return;
@@ -1528,7 +1528,7 @@ const subcategoryLabel = useMemo(() => {
      <Text style={modalStyles.body}>{language === "en" ? "A photo can make the item easier to identify and improve possible matches." : "Et bilde kan gjøre gjenstanden enklere å identifisere og forbedre mulige treff."}</Text>
      <View style={modalStyles.actions}>
        <Pressable style={[modalStyles.btn, modalStyles.btnOutline]} onPress={() => { setPhotoPromptOpen(false); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true })); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Add photo" : "Legg til bilde"}</Text></Pressable>
-       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current(); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Continue" : "Fortsett"}</Text></Pressable>
+       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current({ allowWithoutImage: true }); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Continue" : "Fortsett"}</Text></Pressable>
      </View>
    </View></View>
  </Modal>

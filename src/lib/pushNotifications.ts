@@ -87,6 +87,10 @@ function navigateFromData(router: ReturnType<typeof useRouter>, data: any) {
   if (kind === "chat" && id) return router.push(`/chat/${id}`);
   if (kind === "match" && id) return router.push(`/matches/${id}`);
   if (kind === "report" && id) return router.push({ pathname: "/my-reports", params: { section: data?.section ?? "active", reportId: id } });
+  if ((kind === "area_alert_campaign" || kind === "areaAlert") && id) return router.push(`/area-alert/${id}`);
+  if (String(data?.type || "").toUpperCase() === "GEO_ALERT" || String(data?.type || "").toUpperCase() === "AREA_ALERT") {
+    return router.push({ pathname: "/notifications", params: { tab: "nearby" } });
+  }
   router.push("/notifications");
 }
 

@@ -200,6 +200,15 @@ try {
   console.warn("[BOOT] /observations NOT mounted:", e?.message || e);
 }
 
+// ---- Mount /observation-chat ----
+try {
+  const observationChatRoutes = require("./routes/observationChat");
+  app.use("/observation-chat", observationChatRoutes);
+  console.log("[BOOT] Mounted /observation-chat routes");
+} catch (e) {
+  console.warn("[BOOT] /observation-chat NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

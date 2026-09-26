@@ -15,6 +15,7 @@ type DetailData = {
   geo_alert_campaigns: Array<any>;
   confirmed_matches: Array<any>;
   last_messages: Array<any>;
+  observations: Array<any>;
 };
 
 function dateTime(value?: string | null, language: "no" | "en" = "no") {
@@ -177,6 +178,7 @@ export default function ReportDetailsScreen() {
               </View>
             )}
 
+            <View style={styles.card}><Text style={styles.h2}>{language === "en" ? "Observations and possible finds" : "Observasjoner og mulige funn"}</Text>{(data.observations||[]).length===0?<Text style={styles.muted}>{language==="en"?"No observations yet.":"Ingen observasjoner ennå."}</Text>:(data.observations||[]).map((o:any)=><Pressable key={o.id} style={styles.observationCard} onPress={()=>router.push(`/observation/${o.id}`)}><Text style={styles.observationTitle}>{o.observation_type==="FOUND"?(language==="en"?"Possible find":"Mulig funn"):(language==="en"?"Seen":"Observert")} · {o.status==="NEW"?(language==="en"?"New":"Ny"):o.status==="CONFIRMED"?(language==="en"?"Confirmed":"Bekreftet"):o.status}</Text><Text style={styles.observationMeta}>{dateTime(o.observed_at,language)}</Text>{o.comment&&<Text style={styles.observationMeta} numberOfLines={2}>{o.comment}</Text>}<Text style={styles.observationLink}>{language==="en"?"View details":"Se detaljer"}</Text></Pressable>)}</View>
             <View style={styles.card}>
               <Text style={styles.h2}>{language === "en" ? "Confirmed matches and chat" : "Bekreftede treff og chat"}</Text>
               {data.confirmed_matches.length === 0 ? <Text style={styles.muted}>{language === "en" ? "No confirmed matches." : "Ingen bekreftede treff."}</Text> : data.confirmed_matches.map((match) => {
@@ -238,7 +240,7 @@ const styles = StyleSheet.create({
   entitlement: { marginTop: 12, padding: 12, borderRadius: 13, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: theme.colors.border },
   entitlementTitle: { color: theme.colors.text, fontWeight: "900" },
   entitlementMeta: { color: theme.colors.muted, fontWeight: "600", marginTop: 4 },
-  match: { marginTop: 12, padding: 13, borderRadius: 13, borderWidth: 1, borderColor: "#C7D2FE", backgroundColor: "#EEF2FF" },
+  observationCard:{marginTop:12,padding:13,borderRadius:13,borderWidth:1,borderColor:"#BAE6FD",backgroundColor:"#F0F9FF"},observationTitle:{fontWeight:"900",color:theme.colors.text},observationMeta:{marginTop:4,fontWeight:"600",color:theme.colors.muted},observationLink:{marginTop:8,fontWeight:"900",color:theme.colors.primary},match: { marginTop: 12, padding: 13, borderRadius: 13, borderWidth: 1, borderColor: "#C7D2FE", backgroundColor: "#EEF2FF" },
   matchTitle: { color: theme.colors.primary, fontWeight: "900" },
   matchMeta: { color: theme.colors.text, fontWeight: "600", marginTop: 4 },
   geoAlertCta: { padding: 16, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#93C5FD", borderRadius: 18, marginBottom: 12 },

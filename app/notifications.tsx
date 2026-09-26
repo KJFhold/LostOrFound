@@ -55,6 +55,7 @@ function notificationTitle(n: Notif, language: "no" | "en") {
   if (type === "REPORT_EXPIRING") return language === "en" ? "Case expiring soon" : "Saken utløper snart";
   if (type === "REPORT_EXPIRED") return language === "en" ? "Case expired" : "Saken er utløpt";
   if (type === "REPORT_ARCHIVED") return language === "en" ? "Case archived" : "Saken er arkivert";
+  if (type === "RESOLUTION_PROPOSED" || type === "RESOLUTION_CONFIRMED" || type === "RESOLUTION_REJECTED") return n.title || (language === "en" ? "Case resolution" : "Avslutning av sak");
   if (type === "OBSERVATION_MESSAGE" || type === "OBSERVATION_STATUS") return n.title || (language === "en" ? "Observation update" : "Oppdatering om observasjon");
   if (type === "AREA_ALERT_OBSERVATION") return n.title || (language === "en" ? "New observation" : "Ny observasjon");
   if (type === "AREA_ALERT" || type === "GEO_ALERT") return language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt";

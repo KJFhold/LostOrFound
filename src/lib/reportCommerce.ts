@@ -40,6 +40,21 @@ export function createReportOrder(input: {
 export function fetchReportOrder(orderId: string) {
   return request<{ order: any }>(`/orders/${encodeURIComponent(orderId)}`);
 }
+export type TestOrderActivationResult = {
+  order: any;
+  entitlement: any;
+  campaignId?: string | null;
+  areaAlertDispatch?: {
+    ok?: boolean;
+    eligible?: number;
+    sent?: number;
+    skippedAsDuplicate?: number;
+    error?: string;
+    tickets?: unknown[];
+  } | null;
+  testActivation: true;
+};
+
 export function activateTestReportOrder(orderId: string) {
-  return request<{ order: any; entitlement: any; testActivation: true }>(`/orders/${encodeURIComponent(orderId)}/test-activate`, { method: "POST" });
+  return request<TestOrderActivationResult>(`/orders/${encodeURIComponent(orderId)}/test-activate`, { method: "POST" });
 }

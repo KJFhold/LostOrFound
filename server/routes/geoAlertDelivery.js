@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { supaAdmin } = require("../supabaseClient");
 const { requireUser } = require("../mw/auth");
+const { dispatchAreaAlertCampaign } = require("../lib/geoAlertDispatch");
 
 const testUsers = () => new Set(String(process.env.GEO_ALERT_TEST_USER_IDS || "").split(",").map(x => x.trim()).filter(Boolean));
 const testEnabled = () => String(process.env.GEO_ALERT_TEST_MODE || "").toLowerCase() === "true";
@@ -29,71 +30,39 @@ router.get("/:campaignId/estimate", requireUser, async (req, res) => {
 router.post("/:campaignId/test-dispatch", requireUser, async (req, res) => {
   try {
     if (!testEnabled() || !testUsers().has(req.user.id)) return res.status(403).json({ error: "GEO_ALERT_TEST_NOT_ALLOWED" });
-    const campaign = await ownedCampaign(String(req.params.campaignId), req.user.id);
+    const campaign = await ownedCampaign(String(req.params.campaignId || "").trim(), req.user.id);
     if (!campaign) return res.status(404).json({ error: "CAMPAIGN_NOT_FOUND" });
-    const { data: dispatchable, error: dErr } = await supaAdmin.rpc("geo_alert_campaign_is_dispatchable", { p_campaign_id: campaign.id });
-    if (dErr) throw dErr;
-    if (!dispatchable) return res.status(409).json({ error: "CAMPAIGN_NOT_DISPATCHABLE" });
+    const result = await dispatchAreaAlertCampaign(campaign.id);
+    if (!result.ok) return res.status(409).json(result);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || "AREA_ALERT_TEST_DISPATCH_FAILED" });
+  }
+});
 
-    const { data: candidates, error } = await supaAdmin.rpc("geo_alert_eligible_installations", { p_campaign_id: campaign.id });
+router.get("/:campaignId/view", requireUser, async (req, res) => {
+  try {
+    const campaignId = String(req.params.campaignId || "").trim();
+    const { data: recipient, error: recipientError } = await supaAdmin
+      .from("geo_alert_recipients")
+      .select("campaign_id,status")
+      .eq("campaign_id", campaignId)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+    if (recipientError) throw recipientError;
+    if (!recipient) return res.status(404).json({ error: "AREA_ALERT_NOT_AVAILABLE" });
+
+    const { data: campaign, error } = await supaAdmin
+      .from("geo_alert_campaigns")
+      .select("id,status,radius_m,starts_at,ends_at,report_id,reports(id,title,category,subcategory_key,color,brand,description,location_label,status)")
+      .eq("id", campaignId)
+      .maybeSingle();
     if (error) throw error;
-    const notificationKey = `GEO_ALERT:${campaign.id}`;
-    const accepted = [];
-    for (const candidate of candidates || []) {
-      const { data: recipient, error: insertErr } = await supaAdmin.from("geo_alert_recipients").upsert({
-        campaign_id: campaign.id,
-        user_id: candidate.recipient_user_id,
-        installation_id: candidate.installation_id,
-        expo_push_token: candidate.expo_push_token,
-        watch_area_id: candidate.watch_area_id,
-        category_key: candidate.category_key,
-        status: "QUEUED",
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "campaign_id,installation_id", ignoreDuplicates: true }).select("id").maybeSingle();
-      if (insertErr) throw insertErr;
-      if (recipient) accepted.push({ ...candidate, recipientRowId: recipient.id });
-    }
-
-    if (!accepted.length) return res.json({ ok: true, sent: 0, skippedAsDuplicate: (candidates || []).length });
-
-    const messages = accepted.map(x => ({
-      to: x.expo_push_token,
-      sound: "default",
-      title: x.language === "en" ? "Lost item in your area" : "Mistet gjenstand i området ditt",
-      body: x.language === "en" ? `${x.report_title || "An item"} was reported lost near an area you follow.` : `${x.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
-      data: { type: "GEO_ALERT", targetKind: "report", targetId: x.report_id, section: "active", campaignId: campaign.id, notificationKey },
-    }));
-
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: { Accept: "application/json", "Accept-Encoding": "gzip, deflate", "Content-Type": "application/json" },
-      body: JSON.stringify(messages),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) return res.status(502).json({ error: "EXPO_PUSH_SEND_FAILED", details: body });
-    const tickets = Array.isArray(body?.data) ? body.data : [body?.data].filter(Boolean);
-
-    for (let i = 0; i < accepted.length; i++) {
-      const x = accepted[i]; const ticket = tickets[i] || {};
-      const status = ticket.status === "ok" ? "TICKET_OK" : "TICKET_ERROR";
-      await supaAdmin.from("geo_alert_recipients").update({ status, updated_at: new Date().toISOString() }).eq("id", x.recipientRowId);
-      await supaAdmin.from("push_delivery_log").insert({
-        user_id: x.recipient_user_id,
-        installation_id: x.installation_id,
-        expo_push_token: x.expo_push_token,
-        notification_type: "GEO_ALERT",
-        notification_key: notificationKey,
-        campaign_id: campaign.id,
-        expo_ticket_id: ticket.id || null,
-        status,
-        error_code: ticket?.details?.error || null,
-        error_message: ticket?.message || null,
-        payload: messages[i],
-        updated_at: new Date().toISOString(),
-      });
-    }
-    return res.json({ ok: true, eligible: (candidates || []).length, sent: accepted.length, skippedAsDuplicate: (candidates || []).length - accepted.length, tickets });
-  } catch (e) { return res.status(500).json({ error: e?.message || "GEO_ALERT_TEST_DISPATCH_FAILED" }); }
+    if (!campaign) return res.status(404).json({ error: "AREA_ALERT_NOT_AVAILABLE" });
+    return res.json({ ok: true, campaign, recipientStatus: recipient.status });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || "AREA_ALERT_VIEW_FAILED" });
+  }
 });
 
 router.post("/receipts/check", requireUser, async (req, res) => {

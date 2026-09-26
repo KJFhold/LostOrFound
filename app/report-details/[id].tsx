@@ -30,7 +30,7 @@ function value(value: unknown) {
 function productLabel(code: string, language: "no" | "en") {
   if (code === "REPORT_REACTIVATION") return language === "en" ? "Report reactivation" : "Reaktivering";
   if (code === "LONG_TERM_WATCH_ANNUAL") return language === "en" ? "Annual long-term watch" : "Årlig langtidsvakt";
-  if (code.startsWith("GEO_ALERT_TIER_")) return language === "en" ? "Geo alert" : "Geovarsel";
+  if (code.startsWith("GEO_ALERT_TIER_")) return language === "en" ? "Area alert" : "Områdevarsel";
   return code;
 }
 
@@ -143,18 +143,18 @@ export default function ReportDetailsScreen() {
 
             {String(data.report.type || "").toUpperCase() === "LOST" && data.report.lat != null && data.report.lng != null && (
               <View style={styles.geoAlertCta}>
-                <Text style={styles.geoAlertCtaTitle}>{language === "en" ? "Notify people in the area" : "Varsle personer i området"}</Text>
+                <Text style={styles.geoAlertCtaTitle}>{language === "en" ? "Notify people nearby" : "Varsle i området"}</Text>
                 <Text style={styles.geoAlertCtaBody}>{language === "en" ? "Preview coverage, qualified recipients and the current test price before any purchase." : "Forhåndsvis dekningsområde, kvalifiserte mottakere og aktuell testpris før eventuelt kjøp."}</Text>
                 <Pressable
                   style={styles.geoAlertCtaButton}
                   onPress={() => router.push({ pathname: "/geo-alert-create", params: { reportId: data.report.id, title: data.report.title || "", lat: String(data.report.lat), lng: String(data.report.lng) } })}
                 >
-                  <Text style={styles.geoAlertCtaButtonText}>{language === "en" ? "Preview geo alert" : "Forhåndsvis geovarsel"}</Text>
+                  <Text style={styles.geoAlertCtaButtonText}>{language === "en" ? "Preview area alert" : "Forhåndsvis områdevarsel"}</Text>
                 </Pressable>
               </View>
             )}
             <View style={styles.card}>
-              <Text style={styles.h2}>{language === "en" ? "Paid additions" : "Betalte tillegg"}</Text>
+              <Text style={styles.h2}>{language === "en" ? "Additional services" : "Tilleggstjenester"}</Text>
               {data.entitlements.length === 0 ? <Text style={styles.muted}>{language === "en" ? "No paid additions." : "Ingen betalte tillegg."}</Text> : data.entitlements.map((item) => (
                 <View key={item.id} style={styles.entitlement}>
                   <Text style={styles.entitlementTitle}>{productLabel(String(item.product_code || ""), language)}</Text>
@@ -166,10 +166,10 @@ export default function ReportDetailsScreen() {
 
             {data.geo_alert_campaigns.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.h2}>{language === "en" ? "Geo alerts" : "Geovarsler"}</Text>
+                <Text style={styles.h2}>{language === "en" ? "Area alerts" : "Områdevarsler"}</Text>
                 {data.geo_alert_campaigns.map((campaign) => (
                   <View key={campaign.id} style={styles.entitlement}>
-                    <Text style={styles.entitlementTitle}>{campaign.status} · {campaign.geometry_type}</Text>
+                    <Text style={styles.entitlementTitle}>{String(campaign.status).toUpperCase() === "ACTIVE" ? (language === "en" ? "Active" : "Aktivt") : campaign.status} · {String(campaign.geometry_type).toUpperCase() === "CIRCLE" ? (language === "en" ? "Circular area" : "Sirkelformet område") : campaign.geometry_type}</Text>
                     <Text style={styles.entitlementMeta}>{campaign.radius_m ? `${campaign.radius_m} m` : "–"} · {campaign.area_sq_km ?? "–"} km²</Text>
                     <Text style={styles.entitlementMeta}>{dateTime(campaign.starts_at, language)} → {dateTime(campaign.ends_at, language)}</Text>
                   </View>

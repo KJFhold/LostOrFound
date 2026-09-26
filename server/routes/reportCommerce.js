@@ -8,6 +8,7 @@ const supaAdmin = supaModule?.supaAdmin || supaModule?.supabaseAdmin || supaModu
 const authModule = require("../mw/auth");
 const requireUser = authModule?.requireUser || authModule;
 const { calculateGeoAlertQuote } = require("../lib/geoAlertPricing");
+const { dispatchAreaAlertCampaign } = require("../lib/geoAlertDispatch");
 const GEO_ALERT_DURATION_HOURS = 168;
 const GEO_ALERT_REMINDER_COUNT = 0;
 const VALID_GEO_ALERT_RADII = new Set([250, 500, 1000, 1500, 3000, 5000, 10000]);
@@ -208,15 +209,16 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
       const g = order.request_payload?.geoAlert || {};
       if (report.lat == null || report.lng == null) return res.status(400).json({ error: "GEO_ALERT_REPORT_LOCATION_REQUIRED" });
       const campaignPoint = "SRID=4326;POINT(" + Number(report.lng) + " " + Number(report.lat) + ")";
-      const { error: campaignError } = await supaAdmin.from("geo_alert_campaigns").insert({
+      const { data: createdCampaign, error: campaignError } = await supaAdmin.from("geo_alert_campaigns").insert({
         user_id: userId, report_id: order.report_id, order_id: order.id, status: "ACTIVE",
         geometry_type: "CIRCLE", geometry: campaignPoint, radius_m: Number(g.radiusM || 1500),
         area_sq_km: Number(g.areaSqKm || 0.01), population_density_band: String(g.populationDensityBand || "LOW").toUpperCase(),
         estimated_eligible_users: Number(g.estimatedEligibleUsers || 0), duration_hours: GEO_ALERT_DURATION_HOURS,
         reminder_count: GEO_ALERT_REMINDER_COUNT, price_tier: order.product_code,
         price_snapshot: order.price_snapshot || {}, starts_at: now.toISOString(), ends_at: periodEnd.toISOString(), activated_at: now.toISOString(),
-      });
+      }).select("id").single();
       if (campaignError) return res.status(400).json({ error: campaignError.message });
+      order.created_campaign_id = createdCampaign.id;
     }
 
     const { data: updatedOrder, error: uErr } = await supaAdmin.from("report_orders").update({
@@ -224,7 +226,16 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
       provider_transaction_id: providerTransactionId, entitlement_id: entitlement.id,
     }).eq("id", order.id).eq("user_id", userId).select("*").single();
     if (uErr) return res.status(400).json({ error: uErr.message });
-    return res.json({ order: updatedOrder, entitlement, testActivation: true });
+    let areaAlertDispatch = null;
+    if (order.created_campaign_id) {
+      try {
+        areaAlertDispatch = await dispatchAreaAlertCampaign(order.created_campaign_id);
+      } catch (dispatchError) {
+        console.error("[commerce] area alert dispatch failed", dispatchError?.message || dispatchError);
+        areaAlertDispatch = { ok: false, error: "AREA_ALERT_DISPATCH_FAILED" };
+      }
+    }
+    return res.json({ order: updatedOrder, entitlement, campaignId: order.created_campaign_id || null, areaAlertDispatch, testActivation: true });
   } catch (e) { return res.status(500).json({ error: e?.message || "Server error" }); }
 });
 

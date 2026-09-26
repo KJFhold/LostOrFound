@@ -30,6 +30,7 @@ export default function GeoAlertCreateScreen() {
   const [activating, setActivating] = useState(false);
   const [result, setResult] = useState<GeoAlertPreviewResult | null>(null);
   const [activatedUntil, setActivatedUntil] = useState<string | null>(null);
+  const [dispatchSummary, setDispatchSummary] = useState<{ sent: number; skipped: number } | null>(null);
   const validLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
   const center = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
   const region = useMemo<Region>(() => ({ latitude, longitude, latitudeDelta: 0.09, longitudeDelta: 0.09 }), [latitude, longitude]);
@@ -44,6 +45,7 @@ export default function GeoAlertCreateScreen() {
   useEffect(() => {
     setResult(null);
     setActivatedUntil(null);
+    setDispatchSummary(null);
     requestIdRef.current = null;
     if (validLocation) {
       const delta = Math.max(0.015, Math.min(1.2, radiusM / 18000));
@@ -95,25 +97,25 @@ export default function GeoAlertCreateScreen() {
       });
       const activated = await activateTestReportOrder(created.order.id);
       setActivatedUntil(String(activated.entitlement?.current_period_end || ""));
-      Alert.alert(
-        language === "en" ? "Geo alert created" : "Geovarsel opprettet",
-        language === "en" ? "The test order and seven-day campaign were activated. No real payment was made." : "Testordren og kampanjen på syv dager er aktivert. Ingen ekte betaling er gjennomført."
-      );
+      setDispatchSummary({
+        sent: Number(activated.areaAlertDispatch?.sent || 0),
+        skipped: Number(activated.areaAlertDispatch?.skippedAsDuplicate || 0),
+      });
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Could not create geo alert" : "Kunne ikke opprette geovarsel", e?.message || String(e));
+      Alert.alert(language === "en" ? "Could not create area alert" : "Kunne ikke opprette områdevarsel", e?.message || String(e));
     } finally {
       setActivating(false);
     }
   };
 
   if (!validLocation) {
-    return <View style={styles.safe}><PremiumHeader title={language === "en" ? "Geo alert" : "Geovarsel"} onBack={() => router.back()} /><View style={styles.center}><Text style={styles.muted}>{language === "en" ? "The report has no usable coordinates." : "Rapporten har ingen brukbare koordinater."}</Text></View></View>;
+    return <View style={styles.safe}><PremiumHeader title={language === "en" ? "Area alert" : "Områdevarsel"} onBack={() => router.back()} /><View style={styles.center}><Text style={styles.muted}>{language === "en" ? "The report has no usable coordinates." : "Rapporten har ingen brukbare koordinater."}</Text></View></View>;
   }
 
   return <>
     <Stack.Screen options={{ headerShown: false }} />
     <View style={styles.safe}>
-      <PremiumHeader title={language === "en" ? "Create geo alert" : "Opprett geovarsel"} subtitle={String(params.title || "")} onBack={() => router.back()} />
+      <PremiumHeader title={language === "en" ? "Notify people nearby" : "Varsle i området"} subtitle={String(params.title || "")} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.mapFrame}>
           <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={region} scrollEnabled zoomEnabled>
@@ -146,12 +148,13 @@ export default function GeoAlertCreateScreen() {
           <Text style={styles.warning}>{language === "en" ? "Test mode: no real payment is made. Activation creates a test order and campaign." : "Testmodus: Ingen ekte betaling gjennomføres. Aktivering oppretter en testordre og kampanje."}</Text>
           {!activatedUntil ? (
             <Pressable disabled={activating} style={[styles.activate, activating && styles.disabled]} onPress={createAndActivate}>
-              {activating ? <ActivityIndicator color="#fff" /> : <Text style={styles.activateText}>{language === "en" ? "Create test geo alert" : "Opprett test-geovarsel"}</Text>}
+              {activating ? <ActivityIndicator color="#fff" /> : <Text style={styles.activateText}>{language === "en" ? "Activate test area alert" : "Aktiver test-områdevarsel"}</Text>}
             </Pressable>
           ) : (
             <View style={styles.successBox}>
-              <Text style={styles.successTitle}>{language === "en" ? "Geo alert active" : "Geovarsel aktivt"}</Text>
+              <Text style={styles.successTitle}>{language === "en" ? "Area alert active" : "Områdevarsel aktivt"}</Text>
               <Text style={styles.successText}>{language === "en" ? "Active until" : "Aktiv til"}: {new Date(activatedUntil).toLocaleString(language === "en" ? "en-GB" : "nb-NO")}</Text>
+              {dispatchSummary && <Text style={styles.successText}>{language === "en" ? `${dispatchSummary.sent} notification(s) sent` : `${dispatchSummary.sent} varsel sendt`}{dispatchSummary.skipped ? ` · ${dispatchSummary.skipped} duplikat hoppet over` : ""}</Text>}
               <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>{language === "en" ? "Back to report" : "Tilbake til rapporten"}</Text></Pressable>
             </View>
           )}

@@ -55,6 +55,7 @@ function notificationTitle(n: Notif, language: "no" | "en") {
   if (type === "REPORT_EXPIRING") return language === "en" ? "Case expiring soon" : "Saken utløper snart";
   if (type === "REPORT_EXPIRED") return language === "en" ? "Case expired" : "Saken er utløpt";
   if (type === "REPORT_ARCHIVED") return language === "en" ? "Case archived" : "Saken er arkivert";
+  if (type === "AREA_ALERT" || type === "GEO_ALERT") return language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt";
   return String(n.title || (language === "en" ? "Notification" : "Varsel"));
 }
 
@@ -77,6 +78,7 @@ function notificationBody(n: Notif, language: "no" | "en") {
   if (type === "REPORT_EXPIRING") return language === "en" ? "A case is nearing the end of its visible period." : "En sak nærmer seg slutten av synlighetsperioden.";
   if (type === "REPORT_EXPIRED") return language === "en" ? "A case is no longer active in new matching." : "En sak er ikke lenger aktiv i nye treff.";
   if (type === "REPORT_ARCHIVED") return language === "en" ? "A found report has been archived and is available in your history." : "En funnet-rapport er arkivert og finnes i historikken din.";
+  if (type === "AREA_ALERT" || type === "GEO_ALERT") return n.body ? String(n.body) : (language === "en" ? "Open the area alert for details." : "Åpne områdevarselet for detaljer.");
   return n.body ? String(n.body) : null;
 }
 
@@ -204,6 +206,11 @@ export default function NotificationsScreen() {
       markRead(n.id);
 
       try {
+        const notificationType = String(n.type || "").toUpperCase();
+        if ((notificationType === "AREA_ALERT" || notificationType === "GEO_ALERT") && n.entity_id) {
+          router.push(`/area-alert/${n.entity_id}`);
+          return;
+        }
         const resolved = await resolveNotif(n.id);
         if (!resolved.ok || !resolved.target_id) {
           setItems((prev) =>

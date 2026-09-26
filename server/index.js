@@ -190,6 +190,16 @@ try {
   console.warn("[BOOT] /geo-alert-preview NOT mounted:", e?.message || e);
 }
 
+
+// ---- Mount /observations ----
+try {
+  const observationRoutes = require("./routes/observations");
+  app.use("/observations", observationRoutes);
+  console.log("[BOOT] Mounted /observations routes");
+} catch (e) {
+  console.warn("[BOOT] /observations NOT mounted:", e?.message || e);
+}
+
 // ---- Mount /geo ----
 try {
   const geoRoutes = require("./routes/geo");

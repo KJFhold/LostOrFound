@@ -69,6 +69,18 @@ async function userCanAccessAreaAlert(campaignId, userId) {
   return campaign ? { ok: true, kind: "areaAlert", id: campaignId } : null;
 }
 
+async function userCanAccessObservation(observationId, userId) {
+  const { data, error } = await supaAdmin
+    .from("area_alert_observations")
+    .select("id,observer_user_id,report_owner_user_id")
+    .eq("id", observationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const allowed = data.observer_user_id === userId || data.report_owner_user_id === userId;
+  return allowed ? { ok: true, kind: "observation", id: observationId } : null;
+}
+
 async function resolveNotificationTarget(notification, userId) {
   const entityType = String(notification?.entity_type || "").toLowerCase();
   const entityId = String(notification?.entity_id || "");
@@ -78,6 +90,11 @@ async function resolveNotificationTarget(notification, userId) {
     return { ok: false, reason: "TARGET_NOT_FOUND", kind: entityType || "unknown", id: null };
   }
 
+  if (type === "AREA_ALERT_OBSERVATION" || entityType === "observation") {
+    const observationTarget = await userCanAccessObservation(entityId, userId);
+    if (!observationTarget) return { ok: false, reason: "TARGET_NOT_FOUND", kind: "observation", id: entityId };
+    return observationTarget;
+  }
   if (type === "AREA_ALERT" || type === "GEO_ALERT" || entityType === "area_alert_campaign") {
     const areaAlertTarget = await userCanAccessAreaAlert(entityId, userId);
     if (!areaAlertTarget) {

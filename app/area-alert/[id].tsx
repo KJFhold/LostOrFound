@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { PremiumHeader } from "../../src/ui/PremiumHeader";
 import { theme } from "../../src/ui/theme";
@@ -57,10 +57,14 @@ export default function AreaAlertDetails() {
           <Text style={styles.row}>{language === "en" ? "Area radius" : "Områderadius"}: {campaign.radius_m || "–"} m</Text>
           <Text style={styles.row}>{language === "en" ? "Active until" : "Aktivt til"}: {new Date(campaign.ends_at).toLocaleString(language === "en" ? "en-GB" : "nb-NO")}</Text>
         </View>
-        <View style={styles.info}><Text style={styles.infoText}>{language === "en" ? "Observation and found-item actions will be added in the next package." : "Handlingene «Jeg har sett denne» og «Jeg har funnet denne» legges til i neste pakke."}</Text></View>
+        <View style={styles.actions}>
+          <Pressable style={styles.secondaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "SEEN" } })}><Text style={styles.secondaryButtonText}>{language === "en" ? "I saw this" : "Jeg har sett denne"}</Text></Pressable>
+          <Pressable style={styles.primaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "FOUND" } })}><Text style={styles.primaryButtonText}>{language === "en" ? "I found this" : "Jeg har funnet denne"}</Text></Pressable>
+        </View>
+        <View style={styles.info}><Text style={styles.infoText}>{language === "en" ? "Your information is shared with the report owner. It does not close the case automatically." : "Opplysningene deles med rapportens eier. Saken avsluttes ikke automatisk."}</Text></View>
       </ScrollView>}
     </View>
   </>;
 }
 
-const styles = StyleSheet.create({safe:{flex:1,backgroundColor:theme.colors.bg},center:{flex:1,alignItems:"center",justifyContent:"center"},content:{padding:14,paddingBottom:40},muted:{color:theme.colors.muted,fontWeight:"700"},hero:{padding:18,borderRadius:18,backgroundColor:"#EFF6FF",borderWidth:1,borderColor:"#93C5FD"},eyebrow:{fontSize:11,fontWeight:"900",color:"#1D4ED8"},title:{marginTop:7,fontSize:23,fontWeight:"900",color:theme.colors.text},meta:{marginTop:6,fontWeight:"700",color:theme.colors.muted},card:{marginTop:12,padding:16,borderRadius:18,backgroundColor:theme.colors.card,borderWidth:1,borderColor:theme.colors.border},h2:{fontSize:17,fontWeight:"900",color:theme.colors.text},body:{marginTop:10,lineHeight:21,fontWeight:"600",color:theme.colors.text},row:{marginTop:10,fontWeight:"700",color:theme.colors.text},info:{marginTop:12,padding:14,borderRadius:14,backgroundColor:"#F8FAFC",borderWidth:1,borderColor:theme.colors.border},infoText:{fontWeight:"700",lineHeight:19,color:theme.colors.muted}});
+const styles = StyleSheet.create({safe:{flex:1,backgroundColor:theme.colors.bg},center:{flex:1,alignItems:"center",justifyContent:"center"},content:{padding:14,paddingBottom:40},muted:{color:theme.colors.muted,fontWeight:"700"},hero:{padding:18,borderRadius:18,backgroundColor:"#EFF6FF",borderWidth:1,borderColor:"#93C5FD"},eyebrow:{fontSize:11,fontWeight:"900",color:"#1D4ED8"},title:{marginTop:7,fontSize:23,fontWeight:"900",color:theme.colors.text},meta:{marginTop:6,fontWeight:"700",color:theme.colors.muted},card:{marginTop:12,padding:16,borderRadius:18,backgroundColor:theme.colors.card,borderWidth:1,borderColor:theme.colors.border},h2:{fontSize:17,fontWeight:"900",color:theme.colors.text},body:{marginTop:10,lineHeight:21,fontWeight:"600",color:theme.colors.text},row:{marginTop:10,fontWeight:"700",color:theme.colors.text},actions:{marginTop:12,flexDirection:"row",gap:8},secondaryButton:{flex:1,minHeight:48,borderRadius:14,borderWidth:1,borderColor:theme.colors.primary,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.card},secondaryButtonText:{fontWeight:"900",color:theme.colors.primary,textAlign:"center"},primaryButton:{flex:1,minHeight:48,borderRadius:14,alignItems:"center",justifyContent:"center",backgroundColor:theme.colors.primary},primaryButtonText:{fontWeight:"900",color:"#fff",textAlign:"center"},info:{marginTop:12,padding:14,borderRadius:14,backgroundColor:"#F8FAFC",borderWidth:1,borderColor:theme.colors.border},infoText:{fontWeight:"700",lineHeight:19,color:theme.colors.muted}});

@@ -18,6 +18,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../src/lib/supabase";
+import { API_BASE_URL } from "../../src/lib/config";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { theme } from "../../src/ui/theme";
 import { PremiumHeader } from "../../src/ui/PremiumHeader";

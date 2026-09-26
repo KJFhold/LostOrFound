@@ -23,6 +23,7 @@ const supaAdmin =
 
 const authModule = require("../mw/auth");
 const requireUser = authModule?.requireUser || authModule;
+const { notifyUser } = require("../lib/userNotify");
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
@@ -309,4 +310,5 @@ router.post("/:id/status", requireUser, async (req, res) => {
   }
 });
 
+router.post("/:id/messages", requireUser, async(req,res)=>{ try { const body=String(req.body?.body||"").replace(/\s+/g," ").trim(); if(!body||body.length>1000)return res.status(400).json({error:"INVALID_MESSAGE"}); const q=await supaAdmin.from("matches").select("id,lost:lost_id(user_id),found:found_id(user_id)").eq("id",req.params.id).maybeSingle(); if(q.error)throw q.error; const m=q.data; const users=[m?.lost?.user_id,m?.found?.user_id]; if(!m||!users.includes(req.user.id))return res.status(404).json({error:"MATCH_NOT_FOUND"}); const ins=await supaAdmin.from("messages").insert({conversation_id:m.id,sender_id:req.user.id,body}).select("*").single(); if(ins.error)throw ins.error; const other=users.find(x=>x&&x!==req.user.id); if(other)await notifyUser({userId:other,type:"NEW_MESSAGE",entityType:"chat",entityId:m.id,title:"Ny melding",body:"Du har fått en ny chatmelding."}); return res.json({ok:true,message:ins.data}); } catch(e){return res.status(500).json({error:e?.message||"MESSAGE_SEND_FAILED"});} });
 module.exports = router;

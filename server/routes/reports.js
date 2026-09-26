@@ -875,15 +875,16 @@ router.get("/:id", requireUser, async (req, res) => {
     if (rErr) return res.status(400).json({ error: rErr.message });
     if (!report) return res.status(404).json({ error: "Report not found" });
 
-    const [imagesResult, entitlementsResult, campaignsResult, lostMatchesResult, foundMatchesResult] = await Promise.all([
+    const [imagesResult, entitlementsResult, campaignsResult, lostMatchesResult, foundMatchesResult, observationsResult] = await Promise.all([
       supaAdmin.from("report_images").select("id, path, sort_order").eq("report_id", reportId).order("sort_order", { ascending: true }),
       supaAdmin.from("report_entitlements").select("id, product_code, status, starts_at, current_period_end, auto_renews, provider, order_id").eq("report_id", reportId).order("created_at", { ascending: false }),
       supaAdmin.from("geo_alert_campaigns").select("id, status, geometry_type, radius_m, area_sq_km, population_density_band, estimated_eligible_users, duration_hours, reminder_count, price_tier, starts_at, ends_at, activated_at, completed_at").eq("report_id", reportId).order("created_at", { ascending: false }),
       supaAdmin.from("matches").select("id, status, score, created_at, lost_id, found_id").eq("lost_id", reportId).in("status", ["CONFIRMED", "PAID"]),
       supaAdmin.from("matches").select("id, status, score, created_at, lost_id, found_id").eq("found_id", reportId).in("status", ["CONFIRMED", "PAID"]),
+      supaAdmin.from("area_alert_observations").select("id,observation_type,observed_at,comment,movement_direction,has_item,status,created_at").eq("report_id",reportId).order("created_at",{ascending:false}),
     ]);
 
-    for (const result of [imagesResult, entitlementsResult, campaignsResult, lostMatchesResult, foundMatchesResult]) {
+    for (const result of [imagesResult, entitlementsResult, campaignsResult, lostMatchesResult, foundMatchesResult, observationsResult]) {
       if (result.error) return res.status(400).json({ error: result.error.message });
     }
 
@@ -923,6 +924,7 @@ router.get("/:id", requireUser, async (req, res) => {
       geo_alert_campaigns: campaignsResult.data || [],
       confirmed_matches: confirmedMatches,
       last_messages: lastMessages,
+      observations: observationsResult.data || [],
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });

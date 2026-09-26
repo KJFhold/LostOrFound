@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { supaAdmin } = require("../supabaseClient");
 const { requireUser } = require("../mw/auth");
+const { notifyUser } = require("../lib/userNotify");
 
 async function getObservation(id) {
   const { data, error } = await supaAdmin.from("area_alert_observations")

@@ -9,7 +9,7 @@ import { theme } from "../src/ui/theme";
 import { PremiumHeader } from "../src/ui/PremiumHeader";
 import { AuthHeaderAction } from "../src/ui/AuthHeaderAction";
 import { useI18n } from "../src/i18n/I18nProvider";
-import { localizeStoredReportTitle } from "../src/lib/localizedReport";
+import { notificationCaseLabel } from "../src/lib/localizedReport";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 type Notif = {
@@ -25,6 +25,7 @@ type Notif = {
   agg_count?: number | null;
   target_status?: "ok" | "missing";
   target_kind?: "match" | "report" | "chat" | "unknown" | string;
+  report_context?: { id: string; type?: string | null; category?: string | null; subcategory_key?: string | null; subcategory_custom?: string | null; color?: string | null; brand?: string | null; location_label?: string | null } | null;
 };
 
 function timeAgo(iso: string, language: "no" | "en") {
@@ -58,7 +59,7 @@ function notificationTitle(n: Notif, language: "no" | "en", t: Translate) {
   if (type === "REPORT_EXPIRED") return t("notifications.case.expired");
   if (type === "REPORT_ARCHIVED") return t("notifications.case.archived");
   if (type === "RESOLUTION_PROPOSED" || type === "RESOLUTION_CONFIRMED" || type === "RESOLUTION_REJECTED") return n.title || (t("notifications.case.resolution"));
-  if (type === "OBSERVATION_MESSAGE") return t("notifications.observation.message.title");
+  if (type === "OBSERVATION_MESSAGE") return language === "en" ? "New observation message" : "Ny melding om observasjon";
   if (type === "OBSERVATION_STATUS") return t("notifications.observation.update");
   if (type === "AREA_ALERT_OBSERVATION") return t("notifications.new.observation");
   if (type === "AREA_ALERT" || type === "GEO_ALERT") return t("notifications.lost.item.near.you");
@@ -82,15 +83,10 @@ function notificationBody(n: Notif, language: "no" | "en", t: Translate) {
   if (type === "REPORT_EXPIRING") return t("notifications.a.case.is.nearing.the.end.of.its.visible.period");
   if (type === "REPORT_EXPIRED") return t("notifications.a.case.is.no.longer.active.in.new.matching");
   if (type === "REPORT_ARCHIVED") return t("notifications.a.found.report.has.been.archived.and.is.available.in.your.history");
-  if (type === "OBSERVATION_MESSAGE") return t("notifications.observation.message.body");
+  if (type === "OBSERVATION_MESSAGE") return language === "en" ? "You received a new message about an observation or possible find." : "Du har fått en ny melding om en observasjon eller et mulig funn.";
   if (type === "OBSERVATION_STATUS") return t("notifications.open.the.observation.for.details");
   if (type === "AREA_ALERT_OBSERVATION") return t("notifications.open.the.observation.for.details");
-  if (type === "AREA_ALERT" || type === "GEO_ALERT") {
-    const stored = String(n.body || "");
-    const titlePart = stored.split(/ er meldt mistet| was reported lost/i)[0];
-    const localized = localizeStoredReportTitle(titlePart, language);
-    return localized ? t("notifications.areaAlert.body", { item: localized }) : t("notifications.open.the.area.alert.for.details");
-  }
+  if (type === "AREA_ALERT" || type === "GEO_ALERT") return language === "en" ? "Reported lost near an area you follow." : "Meldt mistet nær et område du følger.";
   return n.body ? String(n.body) : null;
 }
 
@@ -346,6 +342,7 @@ export default function NotificationsScreen() {
                       </View>
                     </View>
 
+                    {!!notificationCaseLabel(item.report_context, language) && <Text style={styles.caseContext} numberOfLines={1}>{notificationCaseLabel(item.report_context, language)}</Text>}
                     {notificationBody(item, language, t) && <Text style={styles.body} numberOfLines={2}>{notificationBody(item, language, t)}</Text>}
 
                     {invalid && (
@@ -426,6 +423,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontWeight: "900", color: theme.colors.text },
   timeWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
   time: { color: theme.colors.muted, fontWeight: "800", fontSize: 12 },
+  caseContext: { marginTop: 7, color: theme.colors.primary, fontWeight: "900", fontSize: 13 },
   body: { marginTop: 6, color: theme.colors.text, fontWeight: "700" },
   unreadDot: { color: theme.colors.primary, fontWeight: "900" },
   invalidBadgeWrap: { marginTop: 8, alignSelf: "flex-start", backgroundColor: "#E2E8F0", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },

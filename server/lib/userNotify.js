@@ -1,7 +1,16 @@
 "use strict";
 const { supaAdmin } = require("../supabaseClient");
 
-async function notifyUser({ userId, type, entityType, entityId, title, body, data = {} }) {
+function localized(value, language) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  return value[language === "en" ? "en" : "no"] || value.no || value.en || "";
+}
+async function notifyUser({ userId, type, entityType, entityId, title, body, titles, bodies, data = {} }) {
+  const installations = await supaAdmin.from("push_installations").select("installation_id,expo_push_token,language").eq("user_id", userId).eq("active", true);
+  const preferredLanguage = installations.data?.find((x) => x.language === "en")?.language || installations.data?.[0]?.language || "no";
+  const inAppTitle = localized(titles || title, preferredLanguage);
+  const inAppBody = localized(bodies || body, preferredLanguage);
   const inserted = await supaAdmin
     .from("notifications")
     .insert({
@@ -9,8 +18,8 @@ async function notifyUser({ userId, type, entityType, entityId, title, body, dat
       type,
       entity_type: entityType,
       entity_id: entityId,
-      title,
-      body,
+      title: inAppTitle,
+      body: inAppBody,
     })
     .select("id")
     .single();
@@ -30,8 +39,8 @@ async function notifyUser({ userId, type, entityType, entityId, title, body, dat
     message: {
       to: x.expo_push_token,
       sound: "default",
-      title,
-      body,
+      title: localized(titles || title, x.language),
+      body: localized(bodies || body, x.language),
       data: { type, targetKind: entityType, targetId: entityId, ...data },
     },
   }));

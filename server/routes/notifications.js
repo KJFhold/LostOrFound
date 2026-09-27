@@ -17,7 +17,7 @@ const requireUser = authModule?.requireUser || authModule;
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
-    "Supabase admin-klient er ikke korrekt initialisert: supaAdmin.from er ikke en funksjon."
+    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function."
   );
 }
 

@@ -1,13 +1,13 @@
 // server/routes/reportsActivity.js
 // GET /reports/mine/with-activity
-// Returnerer rapporter + matchId->reportId map + siste melding per match (ett kall) for "Mine rapporter".
+// Returns reports, match-to-report maps, and the latest message per match in one request.
 
 "use strict";
 
 const express = require("express");
 const router = express.Router();
 
-// Robust import av supabase admin-klient (støtter default + vanlige named exports)
+// Robust Supabase admin client import supporting default and common named exports.
 const supaModule = require("../supabaseClient");
 const supaAdmin =
   supaModule?.supaAdmin ||
@@ -21,8 +21,8 @@ const requireUser = authModule?.requireUser || authModule;
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
-    "Supabase admin-klient er ikke korrekt initialisert: supaAdmin.from er ikke en funksjon. " +
-      "Sjekk ../supabaseClient exports (default vs {supaAdmin})."
+    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function. " +
+      "Check ../supabaseClient exports (default versus { supaAdmin })."
   );
 }
 
@@ -38,7 +38,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
   try {
     const user = req.user;
 
-    // 1) Hent rapporter
+    // 1) Load reports.
     const { data: reports, error: rErr } = await supaAdmin
       .from("reports")
       .select(
@@ -58,7 +58,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
     const reportIds = reps.map((r) => r.id);
     const reportSet = new Set(reportIds);
 
-    // 2) Hent alle matcher for disse rapportene (2 queries, så merge)
+    // 2) Load all matches for these reports and merge both query results.
     const { data: lostMatches, error: lmErr } = await supaAdmin
       .from("matches")
       .select("id, status, lost_id, found_id, lost:lost_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at), found:found_id(id,user_id,status,visible_until,closed_at,archived_at,deleted_at)")
@@ -109,7 +109,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
       return res.json({ reports: reps, matchToReport, historyMatchToReport, lastMessages: [] });
     }
 
-    // 4) Hent siste melding per match i ett kall (krever view: last_message_per_conversation)
+    // 4) Load the latest message per match in one request. Requires last_message_per_conversation.
     const { data: lastRows, error: lastErr } = await supaAdmin
       .from("last_message_per_conversation")
       .select("conversation_id, sender_id, body, created_at")
@@ -119,7 +119,7 @@ router.get("/mine/with-activity", requireUser, async (req, res) => {
       return res.status(400).json({
         error:
           lastErr.message +
-          " (Mangler view? Kjør SQL: create view last_message_per_conversation ... )",
+          " (Missing view: last_message_per_conversation.)",
       });
     }
 

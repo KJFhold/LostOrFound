@@ -9,7 +9,7 @@ import { supabase } from "../../src/lib/supabase";
 
 export default function AreaAlertDetails() {
   const router = useRouter();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -19,13 +19,13 @@ export default function AreaAlertDetails() {
       setLoading(true);
       const { data: session } = await supabase.auth.getSession();
       const token = session.session?.access_token;
-      if (!token) throw new Error(language === "en" ? "You must be logged in." : "Du må være innlogget.");
+      if (!token) throw new Error(t("areaAlert.you.must.be.logged.in"));
       const response = await fetch(`${API_BASE_URL}/geo-alert-delivery/${encodeURIComponent(String(id || ""))}/view`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json?.error || `HTTP_${response.status}`);
       setData(json);
     } catch (error: any) {
-      Alert.alert(language === "en" ? "Could not open alert" : "Kunne ikke åpne varselet", error?.message || String(error));
+      Alert.alert(t("areaAlert.could.not.open.alert"), error?.message || String(error));
     } finally { setLoading(false); }
   }, [id, language]);
 
@@ -35,33 +35,33 @@ export default function AreaAlertDetails() {
   return <>
     <Stack.Screen options={{ headerShown: false }} />
     <View style={styles.safe}>
-      <PremiumHeader title={language === "en" ? "Area alert" : "Områdevarsel"} onBack={() => router.back()} />
-      {loading ? <View style={styles.center}><ActivityIndicator /></View> : !campaign ? <View style={styles.center}><Text style={styles.muted}>{language === "en" ? "Alert unavailable." : "Varselet er ikke tilgjengelig."}</Text></View> :
+      <PremiumHeader title={t("areaAlert.area.alert")} onBack={() => router.back()} />
+      {loading ? <View style={styles.center}><ActivityIndicator /></View> : !campaign ? <View style={styles.center}><Text style={styles.muted}>{t("areaAlert.alert.unavailable")}</Text></View> :
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>{language === "en" ? "LOST ITEM NEAR YOU" : "MISTET GJENSTAND I NÆRHETEN"}</Text>
-          <Text style={styles.title}>{report?.title || (language === "en" ? "Lost item" : "Mistet gjenstand")}</Text>
+          <Text style={styles.eyebrow}>{t("areaAlert.lost.item.near.you")}</Text>
+          <Text style={styles.title}>{report?.title || (t("areaAlert.lost.item"))}</Text>
           <Text style={styles.meta}>{report?.location_label || ""}</Text>
         </View>
         <View style={styles.card}>
-          <Text style={styles.h2}>{language === "en" ? "Description" : "Beskrivelse"}</Text>
-          <Text style={styles.body}>{report?.description || (language === "en" ? "No description available." : "Ingen beskrivelse tilgjengelig.")}</Text>
-          <Text style={styles.row}>{language === "en" ? "Category" : "Kategori"}: {report?.category || "–"}</Text>
-          <Text style={styles.row}>{language === "en" ? "Object" : "Gjenstand"}: {report?.subcategory_key || "–"}</Text>
-          <Text style={styles.row}>{language === "en" ? "Color" : "Farge"}: {report?.color || "–"}</Text>
-          <Text style={styles.row}>{language === "en" ? "Brand" : "Merke"}: {report?.brand || "–"}</Text>
+          <Text style={styles.h2}>{t("areaAlert.description")}</Text>
+          <Text style={styles.body}>{report?.description || (t("areaAlert.no.description.available"))}</Text>
+          <Text style={styles.row}>{t("areaAlert.category")}: {report?.category || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.object")}: {report?.subcategory_key || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.color")}: {report?.color || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.brand")}: {report?.brand || "–"}</Text>
         </View>
         <View style={styles.card}>
-          <Text style={styles.h2}>{language === "en" ? "Alert status" : "Varselstatus"}</Text>
-          <Text style={styles.row}>{String(campaign.status).toUpperCase() === "ACTIVE" ? (language === "en" ? "Active" : "Aktivt") : campaign.status}</Text>
-          <Text style={styles.row}>{language === "en" ? "Area radius" : "Områderadius"}: {campaign.radius_m || "–"} m</Text>
-          <Text style={styles.row}>{language === "en" ? "Active until" : "Aktivt til"}: {new Date(campaign.ends_at).toLocaleString(language === "en" ? "en-GB" : "nb-NO")}</Text>
+          <Text style={styles.h2}>{t("areaAlert.alert.status")}</Text>
+          <Text style={styles.row}>{String(campaign.status).toUpperCase() === "ACTIVE" ? (t("areaAlert.active")) : campaign.status}</Text>
+          <Text style={styles.row}>{t("areaAlert.area.radius")}: {campaign.radius_m || "–"} m</Text>
+          <Text style={styles.row}>{t("areaAlert.active.until")}: {new Date(campaign.ends_at).toLocaleString(language === "en" ? "en-GB" : "nb-NO")}</Text>
         </View>
         <View style={styles.actions}>
-          <Pressable style={styles.secondaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "SEEN" } })}><Text style={styles.secondaryButtonText}>{language === "en" ? "I saw this" : "Jeg har sett denne"}</Text></Pressable>
-          <Pressable style={styles.primaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "FOUND" } })}><Text style={styles.primaryButtonText}>{language === "en" ? "I found this" : "Jeg har funnet denne"}</Text></Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "SEEN" } })}><Text style={styles.secondaryButtonText}>{t("areaAlert.i.saw.this")}</Text></Pressable>
+          <Pressable style={styles.primaryButton} onPress={() => router.push({ pathname: "/observation-create", params: { campaignId: String(id || ""), kind: "FOUND" } })}><Text style={styles.primaryButtonText}>{t("areaAlert.i.found.this")}</Text></Pressable>
         </View>
-        <View style={styles.info}><Text style={styles.infoText}>{language === "en" ? "Your information is shared with the report owner. It does not close the case automatically." : "Opplysningene deles med rapportens eier. Saken avsluttes ikke automatisk."}</Text></View>
+        <View style={styles.info}><Text style={styles.infoText}>{t("areaAlert.your.information.is.shared.with.the.report.owner.it.does.not.close.the")}</Text></View>
       </ScrollView>}
     </View>
   </>;

@@ -8,6 +8,7 @@ import { useI18n } from "../../src/i18n/I18nProvider";
 import { PremiumHeader } from "../../src/ui/PremiumHeader";
 import { theme } from "../../src/ui/theme";
 
+type Translate = ReturnType<typeof useI18n>["t"];
 type DetailData = {
   report: any;
   images: Array<{ id: string; path: string; sort_order: number; signed_url?: string | null }>;
@@ -28,17 +29,17 @@ function value(value: unknown) {
   if (value == null || value === "") return "–";
   return String(value);
 }
-function productLabel(code: string, language: "no" | "en") {
-  if (code === "REPORT_REACTIVATION") return language === "en" ? "Report reactivation" : "Reaktivering";
-  if (code === "LONG_TERM_WATCH_ANNUAL") return language === "en" ? "Annual long-term watch" : "Årlig langtidsvakt";
-  if (code.startsWith("GEO_ALERT_TIER_")) return language === "en" ? "Area alert" : "Områdevarsel";
+function productLabel(code: string, language: "no" | "en", t: Translate) {
+  if (code === "REPORT_REACTIVATION") return t("caseDetail.report.reactivation");
+  if (code === "LONG_TERM_WATCH_ANNUAL") return t("caseDetail.annual.long.term.watch");
+  if (code.startsWith("GEO_ALERT_TIER_")) return t("caseDetail.area.alert");
   return code;
 }
 
 export default function ReportDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -50,13 +51,13 @@ export default function ReportDetailsScreen() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) throw new Error(language === "en" ? "You must be logged in." : "Du må være innlogget.");
+      if (!token) throw new Error(t("caseDetail.you.must.be.logged.in"));
       const response = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json?.error || `HTTP ${response.status}`);
       setData(json as DetailData);
     } catch (error: any) {
-      Alert.alert(language === "en" ? "Error" : "Feil", error?.message || (language === "en" ? "Could not load case." : "Kunne ikke hente saken."));
+      Alert.alert(t("caseDetail.error"), error?.message || (t("caseDetail.could.not.load.case")));
     } finally {
       setLoading(false);
     }
@@ -79,11 +80,11 @@ export default function ReportDetailsScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.safe}>
-        <PremiumHeader title={language === "en" ? "Case details" : "Saksdetaljer"} subtitle={data?.report?.title || ""} onBack={() => router.back()} />
+        <PremiumHeader title={t("caseDetail.case.details")} subtitle={data?.report?.title || ""} onBack={() => router.back()} />
         {loading ? (
-          <View style={styles.center}><ActivityIndicator /><Text style={styles.muted}>{language === "en" ? "Loading…" : "Laster…"}</Text></View>
+          <View style={styles.center}><ActivityIndicator /><Text style={styles.muted}>{t("caseDetail.loading")}</Text></View>
         ) : !data ? (
-          <View style={styles.center}><Text style={styles.muted}>{language === "en" ? "Case unavailable." : "Saken er ikke tilgjengelig."}</Text></View>
+          <View style={styles.center}><Text style={styles.muted}>{t("caseDetail.case.unavailable")}</Text></View>
         ) : (
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.hero}>
@@ -91,13 +92,13 @@ export default function ReportDetailsScreen() {
                 <Text style={[styles.kind, data.report.type === "FOUND" && styles.kindFound]}>{data.report.type}</Text>
                 <Text style={styles.status}>{value(data.report.status)}</Text>
               </View>
-              <Text style={styles.title}>{data.report.title || (language === "en" ? "Item" : "Gjenstand")}</Text>
+              <Text style={styles.title}>{data.report.title || (t("caseDetail.item"))}</Text>
               <Text style={styles.sub}>{value(data.report.location_label)}</Text>
             </View>
 
             {data.images.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.h2}>{language === "en" ? "Photos" : "Bilder"}</Text>
+                <Text style={styles.h2}>{t("caseDetail.photos")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.images}>
                   {data.images.map((image) => {
                     if (!image.signed_url) return null;
@@ -112,7 +113,7 @@ export default function ReportDetailsScreen() {
                         }}
                       >
                         <Image source={{ uri: image.signed_url }} style={styles.image} resizeMode="contain" />
-                        <View style={styles.imageHint}><Text style={styles.imageHintText}>{language === "en" ? "Tap to enlarge" : "Trykk for å forstørre"}</Text></View>
+                        <View style={styles.imageHint}><Text style={styles.imageHintText}>{t("caseDetail.tap.to.enlarge")}</Text></View>
                       </Pressable>
                     );
                   })}
@@ -121,56 +122,56 @@ export default function ReportDetailsScreen() {
             )}
 
             <View style={styles.card}>
-              <Text style={styles.h2}>{language === "en" ? "Report" : "Rapport"}</Text>
-              <Info label={language === "en" ? "Description" : "Beskrivelse"} value={data.report.description} />
-              <Info label={language === "en" ? "Category" : "Kategori"} value={data.report.category} />
-              <Info label={language === "en" ? "Object" : "Gjenstand"} value={data.report.subcategory_key} />
-              <Info label={language === "en" ? "Color" : "Farge"} value={data.report.color} />
-              <Info label={language === "en" ? "Brand" : "Merke"} value={data.report.brand} />
-              <Info label={language === "en" ? "Occurred" : "Tidspunkt"} value={dateTime(data.report.occurred_at, language)} />
-              <Info label={language === "en" ? "Date precision" : "Datopresisjon"} value={data.report.occurred_precision} />
-              <Info label={language === "en" ? "Created" : "Opprettet"} value={dateTime(data.report.created_at, language)} />
-              <Info label={language === "en" ? "Visible until" : "Aktiv til"} value={dateTime(data.report.visible_until, language)} />
-              <Info label={language === "en" ? "Reward" : "Finnerlønn"} value={`${Number(data.report.reward_ore || 0) / 100} NOK`} />
+              <Text style={styles.h2}>{t("caseDetail.report")}</Text>
+              <Info label={t("caseDetail.description")} value={data.report.description} />
+              <Info label={t("caseDetail.category")} value={data.report.category} />
+              <Info label={t("caseDetail.object")} value={data.report.subcategory_key} />
+              <Info label={t("caseDetail.color")} value={data.report.color} />
+              <Info label={t("caseDetail.brand")} value={data.report.brand} />
+              <Info label={t("caseDetail.occurred")} value={dateTime(data.report.occurred_at, language)} />
+              <Info label={t("caseDetail.date.precision")} value={data.report.occurred_precision} />
+              <Info label={t("caseDetail.created")} value={dateTime(data.report.created_at, language)} />
+              <Info label={t("caseDetail.visible.until")} value={dateTime(data.report.visible_until, language)} />
+              <Info label={t("caseDetail.reward")} value={`${Number(data.report.reward_ore || 0) / 100} NOK`} />
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.h2}>{language === "en" ? "Area" : "Område"}</Text>
-              <Info label={language === "en" ? "Place" : "Sted"} value={data.report.location_label} />
+              <Text style={styles.h2}>{t("caseDetail.area")}</Text>
+              <Info label={t("caseDetail.place")} value={data.report.location_label} />
               <Info label="Latitude" value={data.report.lat} />
               <Info label="Longitude" value={data.report.lng} />
-              <Info label={language === "en" ? "Radius" : "Radius"} value={data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m ? `${data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m} m` : null} />
+              <Info label={t("caseDetail.radius")} value={data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m ? `${data.report.radius_m || data.report.search_radius_m || data.report.area_radius_m || data.report.location_radius_m} m` : null} />
             </View>
 
             {String(data.report.type || "").toUpperCase() === "LOST" && data.report.lat != null && data.report.lng != null && (
               <View style={styles.geoAlertCta}>
-                <Text style={styles.geoAlertCtaTitle}>{language === "en" ? "Notify people nearby" : "Varsle i området"}</Text>
-                <Text style={styles.geoAlertCtaBody}>{language === "en" ? "Preview coverage, qualified recipients and the current test price before any purchase." : "Forhåndsvis dekningsområde, kvalifiserte mottakere og aktuell testpris før eventuelt kjøp."}</Text>
+                <Text style={styles.geoAlertCtaTitle}>{t("caseDetail.notify.people.nearby")}</Text>
+                <Text style={styles.geoAlertCtaBody}>{t("caseDetail.preview.coverage.qualified.recipients.and.the.current.test.price.befor")}</Text>
                 <Pressable
                   style={styles.geoAlertCtaButton}
                   onPress={() => router.push({ pathname: "/geo-alert-create", params: { reportId: data.report.id, title: data.report.title || "", lat: String(data.report.lat), lng: String(data.report.lng) } })}
                 >
-                  <Text style={styles.geoAlertCtaButtonText}>{language === "en" ? "Preview area alert" : "Forhåndsvis områdevarsel"}</Text>
+                  <Text style={styles.geoAlertCtaButtonText}>{t("caseDetail.preview.area.alert")}</Text>
                 </Pressable>
               </View>
             )}
             <View style={styles.card}>
-              <Text style={styles.h2}>{language === "en" ? "Additional services" : "Tilleggstjenester"}</Text>
-              {data.entitlements.length === 0 ? <Text style={styles.muted}>{language === "en" ? "No paid additions." : "Ingen betalte tillegg."}</Text> : data.entitlements.map((item) => (
+              <Text style={styles.h2}>{t("caseDetail.additional.services")}</Text>
+              {data.entitlements.length === 0 ? <Text style={styles.muted}>{t("caseDetail.no.paid.additions")}</Text> : data.entitlements.map((item) => (
                 <View key={item.id} style={styles.entitlement}>
-                  <Text style={styles.entitlementTitle}>{productLabel(String(item.product_code || ""), language)}</Text>
+                  <Text style={styles.entitlementTitle}>{productLabel(String(item.product_code || ""), language, t)}</Text>
                   <Text style={styles.entitlementMeta}>{item.status} · {dateTime(item.current_period_end, language)}</Text>
-                  <Text style={styles.entitlementMeta}>{item.auto_renews ? (language === "en" ? "Renews automatically" : "Fornyes automatisk") : (language === "en" ? "Does not renew automatically" : "Fornyes ikke automatisk")}</Text>
+                  <Text style={styles.entitlementMeta}>{item.auto_renews ? (t("caseDetail.renews.automatically")) : (t("caseDetail.does.not.renew.automatically"))}</Text>
                 </View>
               ))}
             </View>
 
             {data.geo_alert_campaigns.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.h2}>{language === "en" ? "Area alerts" : "Områdevarsler"}</Text>
+                <Text style={styles.h2}>{t("caseDetail.area.alerts")}</Text>
                 {data.geo_alert_campaigns.map((campaign) => (
                   <View key={campaign.id} style={styles.entitlement}>
-                    <Text style={styles.entitlementTitle}>{String(campaign.status).toUpperCase() === "ACTIVE" ? (language === "en" ? "Active" : "Aktivt") : campaign.status} · {String(campaign.geometry_type).toUpperCase() === "CIRCLE" ? (language === "en" ? "Circular area" : "Sirkelformet område") : campaign.geometry_type}</Text>
+                    <Text style={styles.entitlementTitle}>{String(campaign.status).toUpperCase() === "ACTIVE" ? (t("caseDetail.active")) : campaign.status} · {String(campaign.geometry_type).toUpperCase() === "CIRCLE" ? (t("caseDetail.circular.area")) : campaign.geometry_type}</Text>
                     <Text style={styles.entitlementMeta}>{campaign.radius_m ? `${campaign.radius_m} m` : "–"} · {campaign.area_sq_km ?? "–"} km²</Text>
                     <Text style={styles.entitlementMeta}>{dateTime(campaign.starts_at, language)} → {dateTime(campaign.ends_at, language)}</Text>
                   </View>
@@ -178,15 +179,15 @@ export default function ReportDetailsScreen() {
               </View>
             )}
 
-            <View style={styles.card}><Text style={styles.h2}>{language === "en" ? "Observations and possible finds" : "Observasjoner og mulige funn"}</Text>{(data.observations||[]).length===0?<Text style={styles.muted}>{language==="en"?"No observations yet.":"Ingen observasjoner ennå."}</Text>:(data.observations||[]).map((o:any)=><Pressable key={o.id} style={styles.observationCard} onPress={()=>router.push(`/observation/${o.id}`)}><Text style={styles.observationTitle}>{o.observation_type==="FOUND"?(language==="en"?"Possible find":"Mulig funn"):(language==="en"?"Seen":"Observert")} · {o.status==="NEW"?(language==="en"?"New":"Ny"):o.status==="CONFIRMED"?(language==="en"?"Confirmed":"Bekreftet"):o.status}</Text><Text style={styles.observationMeta}>{dateTime(o.observed_at,language)}</Text>{o.comment&&<Text style={styles.observationMeta} numberOfLines={2}>{o.comment}</Text>}<Text style={styles.observationLink}>{language==="en"?"View details":"Se detaljer"}</Text></Pressable>)}</View>
+            <View style={styles.card}><Text style={styles.h2}>{t("caseDetail.observations.and.possible.finds")}</Text>{(data.observations||[]).length===0?<Text style={styles.muted}>{t("caseDetail.no.observations.yet")}</Text>:(data.observations||[]).map((o:any)=><Pressable key={o.id} style={styles.observationCard} onPress={()=>router.push(`/observation/${o.id}`)}><Text style={styles.observationTitle}>{o.observation_type==="FOUND"?(t("caseDetail.possible.find")):(t("caseDetail.seen"))} · {o.status==="NEW"?(t("caseDetail.new")):o.status==="CONFIRMED"?(t("caseDetail.confirmed")):o.status}</Text><Text style={styles.observationMeta}>{dateTime(o.observed_at,language)}</Text>{o.comment&&<Text style={styles.observationMeta} numberOfLines={2}>{o.comment}</Text>}<Text style={styles.observationLink}>{t("caseDetail.view.details")}</Text></Pressable>)}</View>
             <View style={styles.card}>
-              <Text style={styles.h2}>{language === "en" ? "Confirmed matches and chat" : "Bekreftede treff og chat"}</Text>
-              {data.confirmed_matches.length === 0 ? <Text style={styles.muted}>{language === "en" ? "No confirmed matches." : "Ingen bekreftede treff."}</Text> : data.confirmed_matches.map((match) => {
+              <Text style={styles.h2}>{t("caseDetail.confirmed.matches.and.chat")}</Text>
+              {data.confirmed_matches.length === 0 ? <Text style={styles.muted}>{t("caseDetail.no.confirmed.matches")}</Text> : data.confirmed_matches.map((match) => {
                 const last = lastByMatch[String(match.id)];
                 return (
                   <Pressable key={match.id} style={styles.match} onPress={() => router.push(`/chat/${match.id}`)}>
-                    <Text style={styles.matchTitle}>{language === "en" ? "Open chat" : "Åpne chat"} · {match.status}</Text>
-                    <Text style={styles.matchMeta}>{last?.body || (language === "en" ? "No messages yet" : "Ingen meldinger ennå")}</Text>
+                    <Text style={styles.matchTitle}>{t("caseDetail.open.chat")} · {match.status}</Text>
+                    <Text style={styles.matchMeta}>{last?.body || (t("caseDetail.no.messages.yet"))}</Text>
                     <Text style={styles.matchMeta}>{dateTime(last?.created_at || match.created_at, language)}</Text>
                   </Pressable>
                 );
@@ -194,7 +195,7 @@ export default function ReportDetailsScreen() {
             </View>
 
             <Pressable style={styles.editButton} onPress={() => router.push({ pathname: "/(report)/create-report", params: { editReportId: data.report.id } })}>
-              <Text style={styles.editText}>{language === "en" ? "Edit report" : "Rediger rapport"}</Text>
+              <Text style={styles.editText}>{t("caseDetail.edit.report")}</Text>
             </Pressable>
           </ScrollView>
         )}

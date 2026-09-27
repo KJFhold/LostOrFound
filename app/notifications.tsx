@@ -10,6 +10,7 @@ import { PremiumHeader } from "../src/ui/PremiumHeader";
 import { AuthHeaderAction } from "../src/ui/AuthHeaderAction";
 import { useI18n } from "../src/i18n/I18nProvider";
 
+type Translate = ReturnType<typeof useI18n>["t"];
 type Notif = {
   id: string;
   user_id: string;
@@ -46,57 +47,55 @@ function timeAgo(iso: string, language: "no" | "en") {
   return `${days} d`;
 }
 
-function notificationTitle(n: Notif, language: "no" | "en") {
+function notificationTitle(n: Notif, language: "no" | "en", t: Translate) {
   const type = String(n.type || "").toUpperCase();
-  if (type === "NEW_MATCH") return language === "en" ? "New match" : "Nytt treff";
-  if (type === "MATCH_CONFIRMED") return language === "en" ? "Match confirmed" : "Treff bekreftet";
-  if (type === "NEW_MESSAGE") return language === "en" ? "New message" : "Ny melding";
-  if (type === "REPORT_UPDATED") return language === "en" ? "Case updated" : "Sak oppdatert";
-  if (type === "REPORT_EXPIRING") return language === "en" ? "Case expiring soon" : "Saken utløper snart";
-  if (type === "REPORT_EXPIRED") return language === "en" ? "Case expired" : "Saken er utløpt";
-  if (type === "REPORT_ARCHIVED") return language === "en" ? "Case archived" : "Saken er arkivert";
-  if (type === "RESOLUTION_PROPOSED" || type === "RESOLUTION_CONFIRMED" || type === "RESOLUTION_REJECTED") return n.title || (language === "en" ? "Case resolution" : "Avslutning av sak");
-  if (type === "OBSERVATION_MESSAGE" || type === "OBSERVATION_STATUS") return n.title || (language === "en" ? "Observation update" : "Oppdatering om observasjon");
-  if (type === "AREA_ALERT_OBSERVATION") return n.title || (language === "en" ? "New observation" : "Ny observasjon");
-  if (type === "AREA_ALERT" || type === "GEO_ALERT") return language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt";
-  return String(n.title || (language === "en" ? "Notification" : "Varsel"));
+  if (type === "NEW_MATCH") return t("notifications.new.match");
+  if (type === "MATCH_CONFIRMED") return t("notifications.match.confirmed");
+  if (type === "NEW_MESSAGE") return t("notifications.new.message");
+  if (type === "REPORT_UPDATED") return t("notifications.case.updated");
+  if (type === "REPORT_EXPIRING") return t("notifications.case.expiring.soon");
+  if (type === "REPORT_EXPIRED") return t("notifications.case.expired");
+  if (type === "REPORT_ARCHIVED") return t("notifications.case.archived");
+  if (type === "RESOLUTION_PROPOSED" || type === "RESOLUTION_CONFIRMED" || type === "RESOLUTION_REJECTED") return n.title || (t("notifications.case.resolution"));
+  if (type === "OBSERVATION_MESSAGE" || type === "OBSERVATION_STATUS") return n.title || (t("notifications.observation.update"));
+  if (type === "AREA_ALERT_OBSERVATION") return n.title || (t("notifications.new.observation"));
+  if (type === "AREA_ALERT" || type === "GEO_ALERT") return t("notifications.lost.item.near.you");
+  return String(n.title || (t("notifications.notification")));
 }
 
-function notificationBody(n: Notif, language: "no" | "en") {
+function notificationBody(n: Notif, language: "no" | "en", t: Translate) {
   const type = String(n.type || "").toUpperCase();
   const count = Number(n.agg_count || 0);
   if (type === "NEW_MATCH") {
-    if (count > 1) return language === "en" ? `${count} possible matches were found for your case.` : `${count} mulige treff ble funnet for saken din.`;
-    return language === "en" ? "A possible match was found for your case." : "Et mulig treff ble funnet for saken din.";
+    if (count > 1) return t("notifications.possible.matches.count", { count });
+    return t("notifications.a.possible.match.was.found.for.your.case");
   }
   if (type === "MATCH_CONFIRMED") {
-    return language === "en"
-      ? "The other party has confirmed the match. Open chat to continue."
-      : "Motparten har bekreftet treffet. Åpne chat for å avtale videre.";
+    return t("notifications.the.other.party.has.confirmed.the.match.open.chat.to.continue");
   }
   if (type === "NEW_MESSAGE") {
-    return language === "en" ? "You have a new chat message." : "Du har en ny chatmelding.";
+    return t("notifications.you.have.a.new.chat.message");
   }
-  if (type === "REPORT_UPDATED") return language === "en" ? "A case has been updated." : "En sak er oppdatert.";
-  if (type === "REPORT_EXPIRING") return language === "en" ? "A case is nearing the end of its visible period." : "En sak nærmer seg slutten av synlighetsperioden.";
-  if (type === "REPORT_EXPIRED") return language === "en" ? "A case is no longer active in new matching." : "En sak er ikke lenger aktiv i nye treff.";
-  if (type === "REPORT_ARCHIVED") return language === "en" ? "A found report has been archived and is available in your history." : "En funnet-rapport er arkivert og finnes i historikken din.";
-  if (type === "AREA_ALERT_OBSERVATION") return n.body ? String(n.body) : (language === "en" ? "Open the observation for details." : "Åpne observasjonen for detaljer.");
-  if (type === "AREA_ALERT" || type === "GEO_ALERT") return n.body ? String(n.body) : (language === "en" ? "Open the area alert for details." : "Åpne områdevarselet for detaljer.");
+  if (type === "REPORT_UPDATED") return t("notifications.a.case.has.been.updated");
+  if (type === "REPORT_EXPIRING") return t("notifications.a.case.is.nearing.the.end.of.its.visible.period");
+  if (type === "REPORT_EXPIRED") return t("notifications.a.case.is.no.longer.active.in.new.matching");
+  if (type === "REPORT_ARCHIVED") return t("notifications.a.found.report.has.been.archived.and.is.available.in.your.history");
+  if (type === "AREA_ALERT_OBSERVATION") return n.body ? String(n.body) : (t("notifications.open.the.observation.for.details"));
+  if (type === "AREA_ALERT" || type === "GEO_ALERT") return n.body ? String(n.body) : (t("notifications.open.the.area.alert.for.details"));
   return n.body ? String(n.body) : null;
 }
 
-function invalidReasonLabel(n: Notif, language: "no" | "en") {
-  if (n.target_kind === "report") return language === "en" ? "Case unavailable" : "Sak ikke tilgjengelig";
-  if (n.target_kind === "match") return language === "en" ? "Match unavailable" : "Treff ikke tilgjengelig";
-  if (n.target_kind === "chat") return language === "en" ? "Chat unavailable" : "Chat ikke tilgjengelig";
-  return language === "en" ? "Unavailable" : "Ikke tilgjengelig";
+function invalidReasonLabel(n: Notif, language: "no" | "en", t: Translate) {
+  if (n.target_kind === "report") return t("notifications.case.unavailable");
+  if (n.target_kind === "match") return t("notifications.match.unavailable");
+  if (n.target_kind === "chat") return t("notifications.chat.unavailable");
+  return t("notifications.unavailable");
 }
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Notif[]>([]);
   const [busy, setBusy] = useState(false);
@@ -121,11 +120,11 @@ export default function NotificationsScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error ?? (language === "en" ? "Could not load notifications" : "Kunne ikke hente varsler"));
+      if (!r.ok) throw new Error(data?.error ?? (t("notifications.could.not.load.notifications")));
 
       setItems((data?.notifications ?? []) as Notif[]);
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Unknown error" : "Ukjent feil"));
+      Alert.alert(t("notifications.error"), e?.message ?? (t("notifications.unknown.error")));
     } finally {
       setLoading(false);
     }
@@ -150,13 +149,13 @@ export default function NotificationsScreen() {
 
   const resolveNotif = useCallback(async (id: string) => {
     const token = await getToken();
-    if (!token) throw new Error(language === "en" ? "Missing login." : "Mangler innlogging.");
+    if (!token) throw new Error(t("notifications.missing.login"));
 
     const r = await fetch(`${API_BASE_URL}/notifications/${encodeURIComponent(id)}/resolve`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error ?? (language === "en" ? "Could not validate notification" : "Kunne ikke validere varsel"));
+    if (!r.ok) throw new Error(data?.error ?? (t("notifications.could.not.validate.notification")));
 
     return data as { ok: boolean; target_kind?: string; target_id?: string; reason?: string };
   }, [getToken, language]);
@@ -172,11 +171,11 @@ export default function NotificationsScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error ?? (language === "en" ? "Could not delete notification" : "Kunne ikke slette varsel"));
+      if (!r.ok) throw new Error(data?.error ?? (t("notifications.could.not.delete.notification")));
 
       setItems((prev) => prev.filter((x) => x.id !== id));
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not delete notification" : "Kunne ikke slette varsel"));
+      Alert.alert(t("notifications.error"), e?.message ?? (t("notifications.could.not.delete.notification")));
     } finally {
       setBusy(false);
     }
@@ -193,15 +192,15 @@ export default function NotificationsScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error ?? (language === "en" ? "Could not delete unavailable notifications" : "Kunne ikke slette utilgjengelige varsler"));
+      if (!r.ok) throw new Error(data?.error ?? (t("notifications.could.not.delete.unavailable.notifications")));
 
       await load();
       Alert.alert(
-        language === "en" ? "Done" : "Ferdig",
-        language === "en" ? `Deleted ${data?.deleted ?? 0} unavailable notification(s).` : `Slettet ${data?.deleted ?? 0} utilgjengelige varsel.`
+        t("notifications.done"),
+        t("notifications.deleted.unavailable.count", { count: data?.deleted ?? 0 })
       );
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not delete unavailable notifications" : "Kunne ikke slette utilgjengelige varsler"));
+      Alert.alert(t("notifications.error"), e?.message ?? (t("notifications.could.not.delete.unavailable.notifications")));
     } finally {
       setBusy(false);
     }
@@ -236,10 +235,8 @@ export default function NotificationsScreen() {
             )
           );
           Alert.alert(
-            language === "en" ? "Unavailable" : "Ikke tilgjengelig",
-            language === "en"
-              ? "This notification points to content that no longer exists. You can delete it from the list."
-              : "Dette varselet peker til innhold som ikke finnes lenger. Du kan slette det fra listen."
+            t("notifications.unavailable"),
+            t("notifications.this.notification.points.to.content.that.no.longer.exists.you.can.dele")
           );
           return;
         }
@@ -259,9 +256,9 @@ export default function NotificationsScreen() {
           return;
         }
 
-        Alert.alert(language === "en" ? "Unavailable" : "Ikke tilgjengelig", language === "en" ? "This notification could not be opened." : "Dette varselet kunne ikke åpnes.");
+        Alert.alert(t("notifications.unavailable"), t("notifications.this.notification.could.not.be.opened"));
       } catch (e: any) {
-        Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open the notification." : "Kunne ikke åpne varselet."));
+        Alert.alert(t("notifications.error"), e?.message ?? (t("notifications.could.not.open.the.notification")));
       }
     },
     [router, markRead, resolveNotif, language]
@@ -298,28 +295,28 @@ export default function NotificationsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.safe}>
         <PremiumHeader
-          title={language === "en" ? "Notifications" : "Varsler"}
-          subtitle={unreadCount ? (language === "en" ? `${unreadCount} unread` : `${unreadCount} uleste`) : (language === "en" ? "Overview" : "Oversikt")}
+          title={t("notifications.notifications")}
+          subtitle={unreadCount ? (t("notifications.unread.count", { count: unreadCount })) : (t("notifications.overview"))}
           onBack={() => router.back()}
           right={<AuthHeaderAction />}
         />
 
         <View style={styles.tabs}>
           <Pressable style={[styles.tab, selectedTab === "mine" && styles.tabActive]} onPress={() => setSelectedTab("mine")}>
-            <Text style={[styles.tabText, selectedTab === "mine" && styles.tabTextActive]}>{language === "en" ? "My cases" : "Mine saker"}{mineUnread ? ` ${mineUnread}` : ""}</Text>
+            <Text style={[styles.tabText, selectedTab === "mine" && styles.tabTextActive]}>{t("notifications.my.cases")}{mineUnread ? ` ${mineUnread}` : ""}</Text>
           </Pressable>
           <Pressable style={[styles.tab, selectedTab === "nearby" && styles.tabActive]} onPress={() => setSelectedTab("nearby")}>
-            <Text style={[styles.tabText, selectedTab === "nearby" && styles.tabTextActive]}>{language === "en" ? "Nearby" : "I nærheten"}{nearbyUnread ? ` ${nearbyUnread}` : ""}</Text>
+            <Text style={[styles.tabText, selectedTab === "nearby" && styles.tabTextActive]}>{t("notifications.nearby")}{nearbyUnread ? ` ${nearbyUnread}` : ""}</Text>
           </Pressable>
         </View>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator />
-            <Text style={styles.muted}>{language === "en" ? "Loading…" : "Laster…"}</Text>
+            <Text style={styles.muted}>{t("notifications.loading")}</Text>
           </View>
         ) : visibleItems.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.muted}>{selectedTab === "nearby" ? (language === "en" ? "No nearby alerts yet." : "Ingen varsler i nærheten ennå.") : (language === "en" ? "No case notifications yet." : "Ingen varsler for egne saker ennå.")}</Text>
+            <Text style={styles.muted}>{selectedTab === "nearby" ? (t("notifications.no.nearby.alerts.yet")) : (t("notifications.no.case.notifications.yet"))}</Text>
           </View>
         ) : (
           <FlatList
@@ -333,18 +330,18 @@ export default function NotificationsScreen() {
                 <View style={[styles.card, unread && styles.cardUnread, invalid && styles.cardInvalid]}>
                   <Pressable onPress={() => openNotif(item)} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
                     <View style={styles.rowTop}>
-                      <Text style={styles.title} numberOfLines={1}>{notificationTitle(item, language)}</Text>
+                      <Text style={styles.title} numberOfLines={1}>{notificationTitle(item, language, t)}</Text>
                       <View style={styles.timeWrap}>
                         {unread && <Text style={styles.unreadDot}>●</Text>}
                         <Text style={styles.time}>{timeAgo(item.created_at, language)}</Text>
                       </View>
                     </View>
 
-                    {notificationBody(item, language) && <Text style={styles.body} numberOfLines={2}>{notificationBody(item, language)}</Text>}
+                    {notificationBody(item, language, t) && <Text style={styles.body} numberOfLines={2}>{notificationBody(item, language, t)}</Text>}
 
                     {invalid && (
                       <View style={styles.invalidBadgeWrap}>
-                        <Text style={styles.invalidBadgeTxt}>{invalidReasonLabel(item, language)}</Text>
+                        <Text style={styles.invalidBadgeTxt}>{invalidReasonLabel(item, language, t)}</Text>
                       </View>
                     )}
                   </Pressable>
@@ -355,16 +352,16 @@ export default function NotificationsScreen() {
                       disabled={busy}
                       onPress={() =>
                         Alert.alert(
-                          language === "en" ? "Delete notification?" : "Slette varsel?",
-                          language === "en" ? "This only removes the notification from your list." : "Dette fjerner bare varselet fra listen din.",
+                          t("notifications.delete.notification"),
+                          t("notifications.this.only.removes.the.notification.from.your.list"),
                           [
-                            { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
-                            { text: language === "en" ? "Delete" : "Slett", style: "destructive", onPress: () => deleteNotification(item.id) },
+                            { text: t("notifications.cancel"), style: "cancel" },
+                            { text: t("notifications.delete"), style: "destructive", onPress: () => deleteNotification(item.id) },
                           ]
                         )
                       }
                     >
-                      <Text style={styles.itemDeleteTxt}>{language === "en" ? "Delete" : "Slett"}</Text>
+                      <Text style={styles.itemDeleteTxt}>{t("notifications.delete")}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -375,12 +372,12 @@ export default function NotificationsScreen() {
 
         <View style={styles.footer}>
           <Pressable style={styles.footerBtn} onPress={load} disabled={busy}>
-            <Text style={styles.footerTxt}>{language === "en" ? "Refresh" : "Oppdater"}</Text>
+            <Text style={styles.footerTxt}>{t("notifications.refresh")}</Text>
           </Pressable>
 
           {selectedTab === "mine" && <Pressable style={[styles.footerBtn, missingCount > 0 ? styles.footerBtnDanger : styles.footerBtnDisabled]} onPress={deleteMissingNotifications} disabled={busy || missingCount === 0}>
             <Text style={[styles.footerTxt, missingCount > 0 ? styles.footerTxtDanger : styles.footerTxtDisabled]}>
-              {language === "en" ? "Delete unavailable" : "Slett utilgjengelige"}
+              {t("notifications.delete.unavailable")}
             </Text>
           </Pressable>}
 
@@ -389,7 +386,7 @@ export default function NotificationsScreen() {
             disabled={busy}
             onPress={markVisibleRead}
           >
-            <Text style={[styles.footerTxt, styles.footerTxtPrimary]}>{language === "en" ? "Mark tab read" : "Marker fanen lest"}</Text>
+            <Text style={[styles.footerTxt, styles.footerTxtPrimary]}>{t("notifications.mark.tab.read")}</Text>
           </Pressable>
         </View>
       </View>

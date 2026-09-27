@@ -1,4 +1,4 @@
-﻿// app/my-reports.tsx
+// app/my-reports.tsx
 // Mine saker (language package A)
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -51,6 +51,7 @@ type LastActivity = {
   match_id?: string;
 };
 
+type Translate = ReturnType<typeof useI18n>["t"];
 type MessageInsert = {
   id: string;
   conversation_id: string;
@@ -201,10 +202,10 @@ function subcategoryLabel(cat?: string, sub?: string, language: "no" | "en" = "n
   return list.find((x: any) => x.value === sub)?.label ?? sub;
 }
 
-function objectPhrase(r: Report, language: "no" | "en") {
+function objectPhrase(r: Report, language: "no" | "en", t: Translate) {
   const sub = subcategoryLabel(r.category, r.subcategory_key, language);
   const color = colorLabel(r.color, language);
-  if (!sub) return r.title || (language === "en" ? "item" : "gjenstand");
+  if (!sub) return r.title || (t("cases.item"));
   if (!color) return sub.toLowerCase();
   if (language === "en") return `${color.toLowerCase()} ${sub.toLowerCase()}`;
   const metal = String(r.color || "").toLowerCase();
@@ -215,25 +216,25 @@ function objectPhrase(r: Report, language: "no" | "en") {
   };
   return compounds[metal]?.[String(r.subcategory_key || "").toUpperCase()] || `${color.toLowerCase()} ${sub.toLowerCase()}`;
 }
-function prettyReportTitle(r: Report, language: "no" | "en") {
-  const typ = r.type === "LOST" ? (language === "en" ? "Lost" : "Mistet") : (language === "en" ? "Found" : "Funnet");
-  const core = objectPhrase(r, language);
+function prettyReportTitle(r: Report, language: "no" | "en", t: Translate) {
+  const typ = r.type === "LOST" ? (t("cases.lost")) : (t("cases.found"));
+  const core = objectPhrase(r, language, t);
   const brand = titleCase(r.brand);
   const tail = brand ? ` (${brand})` : "";
   const placeShort = shortPlace(r.location_label);
-  const place = placeShort ? ` ${language === "en" ? "in" : "i"} ${placeShort}` : "";
+  const place = placeShort ? ` ${t("cases.in")} ${placeShort}` : "";
   return `${typ}: ${core}${tail}${place}`;
 }
 
-function reportStatusInfo(r: Report, language: "no" | "en") {
-  if ((r as any).status === "ARCHIVED" || (r as any).archived_at) return { label: language === "en" ? "Archived" : "Arkivert" };
-  if ((r as any).closed_at || (r as any).status === "CLOSED") return { label: language === "en" ? "Closed" : "Avsluttet" };
-  if ((r as any).status === "EXPIRED" || ((r as any).visible_until && Date.parse((r as any).visible_until) <= Date.now())) return { label: language === "en" ? "Expired" : "Utløpt" };
+function reportStatusInfo(r: Report, language: "no" | "en", t: Translate) {
+  if ((r as any).status === "ARCHIVED" || (r as any).archived_at) return { label: t("cases.archived") };
+  if ((r as any).closed_at || (r as any).status === "CLOSED") return { label: t("cases.closed") };
+  if ((r as any).status === "EXPIRED" || ((r as any).visible_until && Date.parse((r as any).visible_until) <= Date.now())) return { label: t("cases.expired") };
   if ((r as any).visible_until) {
     const daysLeft = Math.ceil((Date.parse((r as any).visible_until) - Date.now()) / (24 * 60 * 60 * 1000));
-    if (Number.isFinite(daysLeft) && daysLeft >= 0) return { label: language === "en" ? `Active · ${daysLeft} d left` : `Aktiv · ${daysLeft} d igjen` };
+    if (Number.isFinite(daysLeft) && daysLeft >= 0) return { label: t("cases.active.days.left", { count: daysLeft }) };
   }
-  return { label: language === "en" ? "Active" : "Aktiv" };
+  return { label: t("cases.active") };
 }
 function canExtendFound(r: Report) {
   if (r.type !== "FOUND" || r.closed_at || r.status === "CLOSED" || r.status === "ARCHIVED") return false;
@@ -324,7 +325,7 @@ export default function MyReportsScreen() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error ?? (language === "en" ? "Could not load cases/activity" : "Kunne ikke hente saker/aktivitet"));
+        throw new Error(data?.error ?? (t("cases.could.not.load.cases.activity")));
       }
 
       const reps: Report[] = data.reports ?? [];
@@ -382,7 +383,7 @@ export default function MyReportsScreen() {
       setMatchCountByReport(matchCounts);
       setReports(sortReportsByActivity(reps, activity));
     } catch (e) {
-      console.warn(language === "en" ? "Could not load cases/unread" : "Kunne ikke hente saker/uleste", e);
+      console.warn(t("cases.could.not.load.cases.unread"), e);
       setReports([]);
       setUnreadByReport({});
       setActivityByReport({});
@@ -463,8 +464,8 @@ export default function MyReportsScreen() {
     const token = sess.session?.access_token;
     if (!token) {
       Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        language === "en" ? "You must be logged in to delete this case." : "Du må være innlogget for å slette saken."
+        t("cases.error"),
+        t("cases.you.must.be.logged.in.to.delete.this.case")
       );
       return;
     }
@@ -476,8 +477,8 @@ export default function MyReportsScreen() {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        data?.error ?? (language === "en" ? "Could not delete case." : "Kunne ikke slette saken.")
+        t("cases.error"),
+        data?.error ?? (t("cases.could.not.delete.case"))
       );
       return;
     }
@@ -506,7 +507,7 @@ export default function MyReportsScreen() {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
     if (!token) {
-      Alert.alert(language === "en" ? "Error" : "Feil", language === "en" ? "You must be logged in." : "Du må være innlogget.");
+      Alert.alert(t("cases.error"), t("cases.you.must.be.logged.in"));
       return;
     }
 
@@ -518,8 +519,8 @@ export default function MyReportsScreen() {
     if (!res.ok) {
       const friendly = lifecycleErrorCopy(data?.error, t);
       Alert.alert(
-        friendly?.title || (language === "en" ? "Could not extend" : "Kunne ikke forlenge"),
-        friendly?.body || data?.message || (language === "en" ? "Please try again later." : "Prøv igjen senere.")
+        friendly?.title || (t("cases.could.not.extend")),
+        friendly?.body || data?.message || (t("cases.please.try.again.later"))
       );
       return;
     }
@@ -533,8 +534,8 @@ export default function MyReportsScreen() {
     const token = sess.session?.access_token;
     if (!token) {
       Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        language === "en" ? "You must be logged in to close this case." : "Du må være innlogget for å avslutte saken."
+        t("cases.error"),
+        t("cases.you.must.be.logged.in.to.close.this.case")
       );
       return;
     }
@@ -546,8 +547,8 @@ export default function MyReportsScreen() {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       Alert.alert(
-        language === "en" ? "Error" : "Feil",
-        data?.message || data?.error || (language === "en" ? "Could not close case." : "Kunne ikke avslutte saken.")
+        t("cases.error"),
+        data?.message || data?.error || (t("cases.could.not.close.case"))
       );
       return;
     }
@@ -559,8 +560,8 @@ export default function MyReportsScreen() {
 
   const confirmDelete = (r: Report) => setConfirmDialog({ kind: "delete", report: r });
 
-  const dialogTitle = confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate found report?" : "Aktiver funnet-rapporten igjen?") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case?" : "Avslutt sak?") : (language === "en" ? "Delete case?" : "Slett sak?");
-  const dialogBody = confirmDialog?.kind === "extend" ? (language === "en" ? "Keep the report active for up to 30 more days. Found reports can remain active for a maximum of 90 days." : "Hold rapporten aktiv i opptil 30 nye dager. Funnet-rapporter kan være aktive i maksimalt 90 dager.") : confirmDialog?.kind === "close" ? (language === "en" ? "The case stays in My cases, but it will no longer be used for new matches." : "Saken beholdes i Mine saker, men brukes ikke lenger for nye treff.") : (language === "en" ? "The case is removed from your account immediately. For security and fraud prevention, limited records may be retained for up to 90 days before permanent deletion." : "Saken fjernes straks fra kontoen din. Av hensyn til sikkerhet og forebygging av svindel kan begrensede opplysninger oppbevares i opptil 90 dager før permanent sletting.");
+  const dialogTitle = confirmDialog?.kind === "extend" ? (t("cases.reactivate.found.report")) : confirmDialog?.kind === "close" ? (t("cases.close.case")) : (t("cases.delete.case"));
+  const dialogBody = confirmDialog?.kind === "extend" ? (t("cases.keep.the.report.active.for.up.to.30.more.days.found.reports.can.remain")) : confirmDialog?.kind === "close" ? (t("cases.the.case.stays.in.my.cases.but.it.will.no.longer.be.used.for.new.match")) : (t("cases.the.case.is.removed.from.your.account.immediately.for.security.and.fra"));
   const activeReports = reports.filter((r) =>
     String(r.status || "ACTIVE").toUpperCase() === "ACTIVE" &&
     !r.closed_at &&
@@ -578,8 +579,8 @@ export default function MyReportsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.safe}>
         <PremiumHeader
-          title={language === "en" ? "My cases" : "Mine saker"}
-          subtitle={section === "active" ? (language === "en" ? "Active cases" : "Aktive saker") : (language === "en" ? "Case history" : "Historikk")}
+          title={t("cases.my.cases")}
+          subtitle={section === "active" ? (t("cases.active.cases")) : (t("cases.case.history"))}
           onBack={() => {
             router.replace("/(tabs)");
           }}
@@ -589,57 +590,57 @@ export default function MyReportsScreen() {
         <View style={styles.sectionTabs}>
           <Pressable style={[styles.sectionTab, section === "active" && styles.sectionTabActive]} onPress={() => setSection("active")}>
             <Text style={[styles.sectionTabText, section === "active" && styles.sectionTabTextActive]}>
-              {language === "en" ? `Active (${activeReports.length})` : `Aktive (${activeReports.length})`}
+              {t("cases.active.count", { count: activeReports.length })}
             </Text>
           </Pressable>
           <Pressable style={[styles.sectionTab, section === "history" && styles.sectionTabActive]} onPress={() => setSection("history")}>
             <Text style={[styles.sectionTabText, section === "history" && styles.sectionTabTextActive]}>
-              {language === "en" ? `History (${historyReports.length})` : `Historikk (${historyReports.length})`}
+              {t("cases.history.count", { count: historyReports.length })}
             </Text>
           </Pressable>
         </View>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator />
-            <Text style={styles.muted}>{language === "en" ? "Loading cases…" : "Laster saker…"}</Text>
+            <Text style={styles.muted}>{t("cases.loading.cases")}</Text>
           </View>
         ) : visibleReports.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.muted}>
               {section === "active"
-                ? (language === "en" ? "No active cases right now." : "Ingen aktive saker akkurat nå.")
-                : (language === "en" ? "No case history yet." : "Ingen historikk ennå.")}
+                ? (t("cases.no.active.cases.right.now"))
+                : (t("cases.no.case.history.yet"))}
             </Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.list}>
             {visibleReports.map((r) => {
-              const act = activityByReport[r.id] ?? null; const actFromMe = act?.sender_id === user?.id; const statusInfo = reportStatusInfo(r, language); const isClosed = r.status === "CLOSED" || !!r.closed_at; const isExpired = r.status === "EXPIRED" || (!!r.visible_until && Date.parse(r.visible_until) <= Date.now()); const latestChatId = act?.match_id; const count = matchCountByReport[r.id] ?? 0;
+              const act = activityByReport[r.id] ?? null; const actFromMe = act?.sender_id === user?.id; const statusInfo = reportStatusInfo(r, language, t); const isClosed = r.status === "CLOSED" || !!r.closed_at; const isExpired = r.status === "EXPIRED" || (!!r.visible_until && Date.parse(r.visible_until) <= Date.now()); const latestChatId = act?.match_id; const count = matchCountByReport[r.id] ?? 0;
               return <View key={r.id} style={styles.card}>
-                <View style={styles.cardTopRow}><Text style={[styles.kindBadge, r.type === "FOUND" && styles.kindBadgeFound]}>{r.type === "LOST" ? (language === "en" ? "LOST" : "MISTET") : (language === "en" ? "FOUND" : "FUNNET")}</Text><Text style={[styles.statusBadge, isExpired && styles.statusExpired, isClosed && styles.statusClosed]}>{statusInfo.label}</Text></View>
-                <Text style={styles.title}>{prettyReportTitle(r, language).replace(/^Lost:\s*|^Found:\s*|^Mistet:\s*|^Funnet:\s*/i, "")}</Text>
-                <Text style={styles.meta}>{language === "en" ? "Reported" : "Registrert"} {new Date(r.created_at).toLocaleDateString()}</Text>
-                {!!r.brand?.trim() && <Text style={styles.brandLine}>{language === "en" ? "Brand" : "Merke"}: {titleCase(r.brand)}</Text>}
-                {r.type === "FOUND" && <Text style={styles.extensionInfo}>{language === "en" ? `Extended ${Number(r.extension_count || 0)} of 2 times` : `Forlenget ${Number(r.extension_count || 0)} av 2 ganger`}</Text>}
-                {act && <Text style={styles.lastLine} numberOfLines={2}>{language === "en" ? "Latest chat" : "Siste chat"}: {actFromMe ? (language === "en" ? "You" : "Du") : (language === "en" ? "Other party" : "Motpart")} · {formatTime(act.at)} · {shortMessage(act.body)}</Text>}
-                {unreadByReport[r.id] && <Text style={styles.unread}>● {language === "en" ? "New message" : "Ny melding"}</Text>}
+                <View style={styles.cardTopRow}><Text style={[styles.kindBadge, r.type === "FOUND" && styles.kindBadgeFound]}>{r.type === "LOST" ? (t("cases.lost.2")) : (t("cases.found.2"))}</Text><Text style={[styles.statusBadge, isExpired && styles.statusExpired, isClosed && styles.statusClosed]}>{statusInfo.label}</Text></View>
+                <Text style={styles.title}>{prettyReportTitle(r, language, t).replace(/^Lost:\s*|^Found:\s*|^Mistet:\s*|^Funnet:\s*/i, "")}</Text>
+                <Text style={styles.meta}>{t("cases.reported")} {new Date(r.created_at).toLocaleDateString()}</Text>
+                {!!r.brand?.trim() && <Text style={styles.brandLine}>{t("cases.brand")}: {titleCase(r.brand)}</Text>}
+                {r.type === "FOUND" && <Text style={styles.extensionInfo}>{t("cases.extended.count", { count: Number(r.extension_count || 0) })}</Text>}
+                {act && <Text style={styles.lastLine} numberOfLines={2}>{t("cases.latest.chat")}: {actFromMe ? (t("cases.you")) : (t("cases.other.party"))} · {formatTime(act.at)} · {shortMessage(act.body)}</Text>}
+                {unreadByReport[r.id] && <Text style={styles.unread}>● {t("cases.new.message")}</Text>}
                 <View style={styles.primaryActions}>
-                  {latestChatId && <Pressable style={styles.primaryBtn} onPress={() => router.push(`/chat/${latestChatId}`)}><Text style={styles.primaryBtnText}>{language === "en" ? "Open chat" : "Åpne chat"}</Text></Pressable>}
-                  {count > 0 ? <Pressable style={[styles.primaryBtn, latestChatId && styles.secondaryPrimary]} onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}><Text style={[styles.primaryBtnText, latestChatId && styles.secondaryPrimaryText]}>{language === "en" ? `View matches (${count})` : `Se treff (${count})`}</Text></Pressable> : <View style={styles.noMatches}><Text style={styles.noMatchesText}>{language === "en" ? "No matches yet" : "Ingen treff ennå"}</Text></View>}
+                  {latestChatId && <Pressable style={styles.primaryBtn} onPress={() => router.push(`/chat/${latestChatId}`)}><Text style={styles.primaryBtnText}>{t("cases.open.chat")}</Text></Pressable>}
+                  {count > 0 ? <Pressable style={[styles.primaryBtn, latestChatId && styles.secondaryPrimary]} onPress={() => router.push({ pathname: "/match", params: { reportId: r.id } })}><Text style={[styles.primaryBtnText, latestChatId && styles.secondaryPrimaryText]}>{t("cases.view.matches.count", { count })}</Text></Pressable> : <View style={styles.noMatches}><Text style={styles.noMatchesText}>{t("cases.no.matches.yet")}</Text></View>}
                 </View>
                 <View style={styles.secondaryActions}>
-                  <Pressable onPress={() => openReport(r)}><Text style={styles.viewLink}>{language === "en" ? "View report" : "Se rapport"}</Text></Pressable>
-                  {!isClosed && <Pressable onPress={() => editReport(r)}><Text style={styles.secondaryLink}>{isExpired ? (language === "en" ? "Edit details" : "Rediger detaljer") : (language === "en" ? "Edit" : "Rediger")}</Text></Pressable>}
-                  {canExtendFound(r) && <Pressable onPress={() => confirmExtendFound(r)}><Text style={styles.extendLink}>{isExpired ? (language === "en" ? "Reactivate" : "Aktiver igjen") : (language === "en" ? "Extend" : "Forleng")}</Text></Pressable>}
-                  {!isClosed && !(r.type === "LOST" && isExpired) && <Pressable onPress={() => confirmClose(r)}><Text style={styles.secondaryLink}>{language === "en" ? "Close" : "Avslutt"}</Text></Pressable>}
-                  <Pressable onPress={() => confirmDelete(r)}><Text style={styles.deleteLink}>{language === "en" ? "Delete" : "Slett"}</Text></Pressable>
+                  <Pressable onPress={() => openReport(r)}><Text style={styles.viewLink}>{t("cases.view.report")}</Text></Pressable>
+                  {!isClosed && <Pressable onPress={() => editReport(r)}><Text style={styles.secondaryLink}>{isExpired ? (t("cases.edit.details")) : (t("cases.edit"))}</Text></Pressable>}
+                  {canExtendFound(r) && <Pressable onPress={() => confirmExtendFound(r)}><Text style={styles.extendLink}>{isExpired ? (t("cases.reactivate")) : (t("cases.extend"))}</Text></Pressable>}
+                  {!isClosed && !(r.type === "LOST" && isExpired) && <Pressable onPress={() => confirmClose(r)}><Text style={styles.secondaryLink}>{t("cases.close")}</Text></Pressable>}
+                  <Pressable onPress={() => confirmDelete(r)}><Text style={styles.deleteLink}>{t("cases.delete")}</Text></Pressable>
                 </View>
               </View>;
             })}
-            <Pressable style={styles.reloadBtn} onPress={load}><Text style={styles.reloadTxt}>{language === "en" ? "Refresh" : "Oppdater"}</Text></Pressable>
+            <Pressable style={styles.reloadBtn} onPress={load}><Text style={styles.reloadTxt}>{t("cases.refresh")}</Text></Pressable>
           </ScrollView>
         )}
-      </View><Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}><View style={dialogStyles.backdrop}><View style={dialogStyles.card}><View style={dialogStyles.iconCircle}><Text style={dialogStyles.iconText}>{confirmDialog?.kind === "delete" ? "!" : confirmDialog?.kind === "close" ? "✓" : "+"}</Text></View><Text style={dialogStyles.title}>{dialogTitle}</Text><Text style={dialogStyles.body}>{dialogBody}</Text><View style={dialogStyles.actions}><Pressable style={dialogStyles.cancelBtn} onPress={() => setConfirmDialog(null)}><Text style={dialogStyles.cancelText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable><Pressable style={[dialogStyles.confirmBtn, confirmDialog?.kind === "delete" && dialogStyles.deleteConfirmBtn]} onPress={() => void runDialogAction()}><Text style={dialogStyles.confirmText}>{confirmDialog?.kind === "extend" ? (language === "en" ? "Reactivate" : "Aktiver") : confirmDialog?.kind === "close" ? (language === "en" ? "Close case" : "Avslutt sak") : (language === "en" ? "Delete" : "Slett")}</Text></Pressable></View></View></View></Modal>
+      </View><Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}><View style={dialogStyles.backdrop}><View style={dialogStyles.card}><View style={dialogStyles.iconCircle}><Text style={dialogStyles.iconText}>{confirmDialog?.kind === "delete" ? "!" : confirmDialog?.kind === "close" ? "✓" : "+"}</Text></View><Text style={dialogStyles.title}>{dialogTitle}</Text><Text style={dialogStyles.body}>{dialogBody}</Text><View style={dialogStyles.actions}><Pressable style={dialogStyles.cancelBtn} onPress={() => setConfirmDialog(null)}><Text style={dialogStyles.cancelText}>{t("cases.cancel")}</Text></Pressable><Pressable style={[dialogStyles.confirmBtn, confirmDialog?.kind === "delete" && dialogStyles.deleteConfirmBtn]} onPress={() => void runDialogAction()}><Text style={dialogStyles.confirmText}>{confirmDialog?.kind === "extend" ? (t("cases.reactivate.2")) : confirmDialog?.kind === "close" ? (t("cases.close.case.2")) : (t("cases.delete"))}</Text></Pressable></View></View></View></Modal>
     </>
   );
 }

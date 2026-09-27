@@ -17,7 +17,7 @@ const requireUser = authModule?.requireUser || authModule;
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
-    "Supabase admin-klient er ikke korrekt initialisert: supaAdmin.from er ikke en funksjon."
+    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function."
   );
 }
 
@@ -295,7 +295,7 @@ function publicEditState(report) {
 
 /**
  * POST /reports
- * Opprett rapport + trigger match-motor
+ * Create a report and refresh matching.
  */
 router.post("/", requireUser, async (req, res) => {
   try {
@@ -325,7 +325,7 @@ router.post("/", requireUser, async (req, res) => {
 
     if (!type || !category || !title || !occurred_at) {
       return res.status(400).json({
-        error: "type, category, title og occurred_at er påkrevd",
+        error: "REQUIRED_REPORT_FIELDS_MISSING",
       });
     }
 
@@ -345,7 +345,7 @@ router.post("/", requireUser, async (req, res) => {
     if (normalizedType === "LOST" && isAnonymousUser(user)) {
       return res.status(403).json({
         error: "ACCOUNT_REQUIRED_FOR_LOST",
-        message: "Mistet-rapporter krever en vanlig konto. Gjest kan kun registrere funn.",
+        message: "A regular account is required to create a lost report.",
       });
     }
 
@@ -357,7 +357,7 @@ router.post("/", requireUser, async (req, res) => {
       if (recentLostCount >= 2 && !(testUser && overrideRequested)) {
         return res.status(429).json({
           error: "LOST_REPORT_WEEKLY_LIMIT",
-          message: "Du kan opprette maksimalt to mistet-rapporter i løpet av syv dager.",
+          message: "You can create up to two lost reports within seven days.",
           limit: 2,
           window_days: 7,
           current_count: recentLostCount,
@@ -368,7 +368,7 @@ router.post("/", requireUser, async (req, res) => {
       if (overrideRequested && !testUser) {
         return res.status(403).json({
           error: "TEST_OVERRIDE_NOT_ALLOWED",
-          message: "Denne kontoen har ikke tilgang til testoverstyring.",
+          message: "This account is not allowed to use the test override.",
         });
       }
     }
@@ -469,11 +469,11 @@ router.get("/mine", requireUser, async (req, res) => {
 
 /**
  * PATCH /reports/:id
- * Rediger rapport med misbruksvern.
- * - LOST krever ekte konto (ikke guest, håndteres av auth/session på backend via eier-sjekk)
- * - Full redigering første 15 minutter
- * - Etter 15 minutter: maks 3 kritiske endringer og 60 min cooldown mellom kritiske endringer
- * - Kritiske endringer regenererer matcher
+ * Edit a report with abuse protection.
+ * - LOST requires a regular account. Ownership is enforced on the backend.
+ * - Full editing during the first 15 minutes.
+ * - After 15 minutes: maximum three critical edits and a 60-minute cooldown.
+ * - Critical edits refresh matches.
  */
 router.patch("/:id", requireUser, async (req, res) => {
   try {
@@ -513,7 +513,7 @@ router.patch("/:id", requireUser, async (req, res) => {
       if (Number.isFinite(lockedUntil) && lockedUntil > Date.now()) {
         return res.status(429).json({
           error: "CRITICAL_EDIT_COOLDOWN",
-          message: "Du har nylig endret gjenstand, tidspunkt eller område. Prøv igjen senere.",
+          message: "The item, time, or area was changed recently. Try again later.",
           edit_locked_until: existing.edit_locked_until,
           edit_state: publicEditState(existing),
         });
@@ -522,7 +522,7 @@ router.patch("/:id", requireUser, async (req, res) => {
       if (currentCriticalCount >= 3) {
         return res.status(429).json({
           error: "CRITICAL_EDIT_LIMIT_REACHED",
-          message: "Denne rapporten har nådd grensen for større endringer. Du kan fortsatt oppdatere tekst, farge, merke og finnerlønn.",
+          message: "This report has reached the critical edit limit. Description, color, brand, and reward can still be updated.",
           edit_state: publicEditState(existing),
         });
       }
@@ -602,9 +602,9 @@ router.patch("/:id", requireUser, async (req, res) => {
 
 /**
  * POST /reports/:id/extend-found
- * Bekreft at finner fortsatt har gjenstanden og forleng FOUND med 30 dager.
- * Maks 2 forlengelser / 90 dager totalt. Tilgjengelig når <= 7 dager gjenstår,
- * eller etter nylig utløp så lenge 90-dagersgrensen ikke er passert.
+ * Confirm that the finder still has the item and extend a FOUND report by 30 days.
+ * Maximum two extensions and 90 active days in total. Available when seven days or less remain,
+ * or shortly after expiry while the 90-day maximum has not been reached.
  */
 router.post("/:id/extend-found", requireUser, async (req, res) => {
   try {
@@ -626,7 +626,7 @@ router.post("/:id/extend-found", requireUser, async (req, res) => {
 
     const extensionCount = Number(existing.extension_count || 0);
     if (extensionCount >= 2) {
-      return res.status(409).json({ error: "FOUND_EXTENSION_LIMIT", message: "Funnet-rapporten har nådd maks 90 dager." });
+      return res.status(409).json({ error: "FOUND_EXTENSION_LIMIT", message: "The found report has reached the 90-day maximum." });
     }
 
     const createdAt = Date.parse(existing.created_at || "");
@@ -635,14 +635,14 @@ router.post("/:id/extend-found", requireUser, async (req, res) => {
 
     const maxVisibleUntil = createdAt + 90 * 24 * 60 * 60 * 1000;
     if (Date.now() >= maxVisibleUntil) {
-      return res.status(409).json({ error: "FOUND_MAX_AGE_REACHED", message: "Funnet-rapporten kan ikke forlenges utover 90 dager." });
+      return res.status(409).json({ error: "FOUND_MAX_AGE_REACHED", message: "The found report cannot be extended beyond 90 days." });
     }
 
     const msLeft = Number.isFinite(currentVisibleUntil) ? currentVisibleUntil - Date.now() : 0;
     if (msLeft > 7 * 24 * 60 * 60 * 1000) {
       return res.status(409).json({
         error: "FOUND_EXTENSION_TOO_EARLY",
-        message: "Rapporten kan forlenges når det er syv dager eller mindre igjen.",
+        message: "The report can be extended when seven days or less remain.",
         visible_until: existing.visible_until,
       });
     }
@@ -681,7 +681,7 @@ router.post("/:id/extend-found", requireUser, async (req, res) => {
 
 /**
  * POST /reports/:id/close
- * Avslutt/lukk rapport uten å slette den. Lukkede rapporter skal ikke matches videre.
+ * Close a report without deleting it. Closed reports are excluded from new matching.
  */
 router.post("/:id/close", requireUser, async (req, res) => {
   try {
@@ -737,7 +737,7 @@ router.post("/:id/close", requireUser, async (req, res) => {
 
 /**
  * DELETE /reports/:id
- * Slett rapport + best-effort cleanup av bilder, matcher, varsler og samtaledata.
+ * Delete a report and perform best-effort cleanup of images, matches, notifications, and conversation data.
  */
 router.delete("/:id", requireUser, async (req, res) => {
   try {

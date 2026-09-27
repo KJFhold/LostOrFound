@@ -58,3 +58,22 @@ export type TestOrderActivationResult = {
 export function activateTestReportOrder(orderId: string) {
   return request<TestOrderActivationResult>(`/orders/${encodeURIComponent(orderId)}/test-activate`, { method: "POST" });
 }
+
+export type PurchaseOverviewItem = {
+  id: string;
+  reportId: string | null;
+  productCode: string;
+  status: string;
+  amountOre: number | null;
+  currency: string | null;
+  platform: string | null;
+  provider: string | null;
+  purchasedAt: string | null;
+  startsAt: string | null;
+  currentPeriodEnd: string | null;
+  autoRenews: boolean;
+  report: { id: string; title?: string | null; type?: string | null; status?: string | null; subcategory_key?: string | null; color?: string | null; location_label?: string | null } | null;
+};
+export function fetchMyPurchases() {
+  return request<{ activePurchases: PurchaseOverviewItem[]; purchaseHistory: PurchaseOverviewItem[] }>("/my-purchases");
+}

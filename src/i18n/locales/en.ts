@@ -829,6 +829,23 @@ export const en = {
     "purchases.restoreCompleteBody": "Your purchases have been refreshed.",
     "purchases.restoreFailed": "Could not restore purchases",
     "purchases.storeUnavailable": "The store service is unavailable right now.",
+    "purchases.loadFailed": "Could not load purchases",
+    "purchases.activeServices": "Active additional services",
+    "purchases.history": "Purchase history",
+    "purchases.noHistory": "No previous purchases.",
+    "purchases.accountPurchase": "Account purchase",
+    "purchases.purchased": "Purchased: {{value}}",
+    "purchases.activeUntil": "Active until: {{value}}",
+    "purchases.cancelled": "Cancelled",
+    "purchases.refunded": "Refunded",
+    "purchases.completed": "Completed",
+    "caseDetail.secondaryColor": "Secondary color",
+    "caseDetail.activeServicesCount": "{{count}} active service(s)",
+    "caseDetail.observationsCount": "{{count}} observation(s) or possible find(s)",
+    "caseDetail.matchesCount": "{{count}} confirmed match(es)",
+    "caseDetail.lost": "Lost",
+    "caseDetail.found": "Found",
+    "caseDetail.details.and.photos": "Details and photos",
   } as const;
 
 export type TranslationKey = keyof typeof en;

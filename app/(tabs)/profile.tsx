@@ -35,8 +35,8 @@ export default function ProfileTab() {
       onPress: () => router.push("/notifications"),
     },
     {
-      icon: "diamond-outline" as const,
-      title: t("profile.premium"),
+      icon: "receipt-outline" as const,
+      title: t("profile.purchases"),
       onPress: () => router.push("/premium-status"),
     },
     {

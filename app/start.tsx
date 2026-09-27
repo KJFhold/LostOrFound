@@ -12,7 +12,7 @@ import { isAnonymousUser } from "../src/lib/authGate";
 export default function StartScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const isGuest = isAnonymousUser(user as any);
   const [choice, setChoice] = useState<"LOST" | "FOUND">("LOST");
 
@@ -45,6 +45,9 @@ export default function StartScreen() {
 
   const goMyReports = () => {
     router.push("/my-reports");
+  };
+  const goNotifications = () => {
+    router.push("/notifications");
   };
 
   const goBack = () => {
@@ -119,13 +122,15 @@ export default function StartScreen() {
             <Pressable style={styles.secondaryBtn} onPress={goMyReports}>
               <Text style={styles.secondaryTxt}>{language === "en" ? "My cases" : "Mine saker"}</Text>
             </Pressable>
-          ) : null}
-
-          <Pressable style={styles.secondaryBtn} onPress={goLogin}>
-            <Text style={styles.secondaryTxt}>
-              {user ? (language === "en" ? "Switch user" : "Bytt bruker") : (language === "en" ? "Log in" : "Logg inn")}
-            </Text>
-          </Pressable>
+          ) : null}          {user ? (
+            <Pressable style={styles.secondaryBtn} onPress={goNotifications}>
+              <Text style={styles.secondaryTxt}>{t("start.notifications")}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.secondaryBtn} onPress={goLogin}>
+              <Text style={styles.secondaryTxt}>{t("common.login")}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </>

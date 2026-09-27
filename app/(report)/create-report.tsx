@@ -1442,16 +1442,6 @@ const subcategoryLabel = useMemo(() => {
                 </Text>  
               </View>  
             )}  
-            {type === "LOST" && (  
-              <Pressable  
-                style={[styles.selectBtn, { marginTop: theme.space.md, alignItems: "center" }]}  
-                onPress={() => router.push("/premium-status")}  
-              >  
-                <Text style={styles.selectBtnTxt}>  
-                  {t("report.create.view.premium.status")}  
-                </Text>  
-              </Pressable>  
-            )}  
             {/* Bilder */}
             <View onLayout={(e) => setImagesSectionY(e.nativeEvent.layout.y)} style={styles.card}>  
               <Text style={styles.h2}>{t("report.create.images")}</Text>  

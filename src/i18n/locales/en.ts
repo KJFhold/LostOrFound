@@ -600,7 +600,7 @@ export const en = {
     "matchDetail.could.not.open.maps.on.this.device": "Could not open maps on this device.",
     "matchDetail.details.and.photos": "Details and photos",
     "matchDetail.dismiss": "Dismiss",
-    "matchDetail.distance.between.reported.points.formatdistance.": "Distance between reported points: \" + formatDistance(distRaw) : \"Avstand mellom rapporterte punkter: \" + formatDistance(distRaw);\n  return language === \"en\" ? \"Location information missing",
+    "matchDetail.distance.between.reported.points.formatdistance.": "Location information missing",
     "matchDetail.error": "Error",
     "matchDetail.found": "Found",
     "matchDetail.images.your.case.vs.other.party": "Images (your case vs other party)",

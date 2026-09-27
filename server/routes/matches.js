@@ -1,13 +1,13 @@
 // server/routes/matches.js
 // Matches API:
-// - GET /matches?reportId=... (henter matcher for rapporten)
-// - GET /matches/:id (henter én match)
-// - POST /matches/:id/status (oppdaterer status)
+// - GET /matches?reportId=... retrieves matches for a report.
+// - GET /matches/:id retrieves one match.
+// - POST /matches/:id/status updates match status.
 //
-// Policy / regler:
-// - 3A: Kun eier av MISTET (LOST) kan bekrefte match (CONFIRMED). FOUND kan ikke initiere kontakt.
-// - B2a: Når match bekreftes, varsle motpart (in-app notification).
-// - B (sikkerhetsnett): Tidsregel med buffer (timer) for å skjule tidsmessig umulige matcher.
+// Policies:
+// - 3A: Only the LOST report owner can confirm a match. The FOUND side cannot initiate contact.
+// - B2a: Notify the other party when a match is confirmed.
+// - B safety rule: Use an hourly buffer to hide chronologically impossible matches.
 "use strict";
 
 const express = require("express");
@@ -31,13 +31,13 @@ if (!supaAdmin || typeof supaAdmin.from !== "function") {
   );
 }
 
-// Konfig: tidsbuffer (timer) for API-filter (default 48). Kan settes i server .env
-// NB: Matchmotoren i Supabase bør bruke samme buffer (parameter p_time_buffer_hours).
+// Configuration: API time buffer in hours, default 48. Can be set in the server environment.
+// The Supabase matching engine should use the same p_time_buffer_hours value.
 const MATCH_TIME_BUFFER_HOURS = (() => {
   const raw = process.env.MATCH_TIME_BUFFER_HOURS;
   const n = Number.parseInt(String(raw ?? "48"), 10);
   if (!Number.isFinite(n)) return 48;
-  return Math.max(0, Math.min(24 * 30, n)); // clamp: 0..30 dager
+  return Math.max(0, Math.min(24 * 30, n)); // Clamp to 0 through 30 days.
 })();
 
 function isAllowedStatus(s) {
@@ -64,17 +64,17 @@ const MATCH_SELECT = `
  )
 `;
 
-// Tidsregel (tilpasset):
-// LOST.occurred_at = når bruker mener de mistet
-// FOUND.occurred_at = "sett siste gang" (ikke funnet-tid)
-// Derfor bruker vi FOUND.created_at (meldt inn-tid) i denne guard'en.
-// Hard stop: hvis LOST-tidspunkt er mer enn buffer etter at FOUND ble meldt inn.
+// Adjusted time rule:
+// LOST.occurred_at is when the user believes the item was lost.
+// FOUND.occurred_at is the last-seen time, not the reported find time.
+// Therefore this guard uses FOUND.created_at, the report submission time.
+// Hard stop when the LOST time exceeds the FOUND submission time plus the buffer.
 function isTimeCompatible(lost, found) {
   try {
     const bufferMs = MATCH_TIME_BUFFER_HOURS * 60 * 60 * 1000;
     const lostWhen = Date.parse(lost?.occurred_at || lost?.created_at || "");
     const foundReported = Date.parse(found?.created_at || "");
-    // Hvis vi ikke har nok data: ikke blokkér
+    // Do not block when the available data is insufficient.
     if (!Number.isFinite(lostWhen) || !Number.isFinite(foundReported)) return true;
     return lostWhen <= foundReported + bufferMs;
   } catch {
@@ -134,8 +134,8 @@ function upsertReason(reasons, key, value) {
   return list;
 }
 
-// Beriker matchene med område-/radiusinfo for frontend:
-// - distance_m (hvis mangler)
+// Enrich matches with area and radius information for the frontend:
+// - distance_m when missing
 // - within_radius
 // - outside_radius_m
 function enrichMatchAreaInfo(match) {
@@ -152,13 +152,13 @@ function enrichMatchAreaInfo(match) {
 
     let distanceM = toNumber(existingDistance);
 
-    // Hvis distance_m ikke finnes fra før, regn den ut her
+    // Calculate distance_m here when it is not already available.
     if (distanceM == null && lostLat != null && lostLng != null && foundLat != null && foundLng != null) {
       distanceM = Math.round(haversineMeters(lostLat, lostLng, foundLat, foundLng));
       reasons = upsertReason(reasons, "distance_m", distanceM);
     }
 
-    // Bruk LOST-radius som grunnlag for områdevurdering
+    // Use the LOST report radius for area evaluation.
     const radiusM = reportRadiusMeters(match.lost);
 
     if (distanceM != null && radiusM != null) {
@@ -228,7 +228,7 @@ router.get("/:id", requireUser, async (req, res) => {
     const owns = match?.lost?.user_id === user.id || match?.found?.user_id === user.id;
     if (!owns) return res.status(403).json({ error: "Not allowed" });
 
-    // Hard stop: skjul lukkede/utløpte/arkiverte og tidsmessig umulige matcher
+    // Hide closed, expired, archived, and chronologically impossible matches.
     if (!isActiveReport(match?.lost) || !isActiveReport(match?.found)) {
       return res.status(404).json({ error: "Match not found" });
     }
@@ -266,7 +266,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
     const ownsFound = match.found?.user_id === user.id;
     if (!ownsLost && !ownsFound) return res.status(403).json({ error: "Not allowed" });
 
-    // 3A: FOUND kan ikke initiere kontakt. Kun MISTET kan bekrefte.
+    // 3A: The FOUND side cannot initiate contact. Only the LOST owner can confirm.
     if (status === "CONFIRMED" && !ownsLost) {
       return res.status(403).json({ error: "Only LOST owner can confirm" });
     }
@@ -274,7 +274,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
     const { error: uErr } = await supaAdmin.from("matches").update({ status }).eq("id", matchId);
     if (uErr) return res.status(400).json({ error: uErr.message });
 
-    // Opprett conversation ved CONFIRMED
+    // Create the conversation when the match is confirmed.
     if (status === "CONFIRMED") {
       const { error: cErr } = await supaAdmin.from("conversations").insert({ id: matchId });
       if (cErr && !String(cErr.message || "").toLowerCase().includes("duplicate")) {
@@ -282,7 +282,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
       }
     }
 
-    // B2a: varsle motpart ved første gang CONFIRMED
+    // B2a: Notify the other party on the first confirmation.
     if (status === "CONFIRMED" && match.status !== "CONFIRMED") {
       const otherUserId = ownsLost
         ? match.found?.user_id
@@ -290,13 +290,16 @@ router.post("/:id/status", requireUser, async (req, res) => {
 
       if (otherUserId && otherUserId !== user.id) {
         try {
-          await supaAdmin.from("notifications").insert({
-            user_id: otherUserId,
+          await notifyUser({
+            userId: otherUserId,
             type: "MATCH_CONFIRMED",
-            entity_type: "match",
-            entity_id: matchId,
-            title: "Treff bekreftet",
-            body: "Motpart har bekreftet treffet. Åpne chat for å avtale videre.",
+            entityType: "match",
+            entityId: matchId,
+            titles: { no: "Treff bekreftet", en: "Match confirmed" },
+            bodies: {
+              no: "Motparten har bekreftet treffet. Åpne chat for å avtale videre.",
+              en: "The other party confirmed the match. Open chat to continue.",
+            },
           });
         } catch (nErr) {
           console.warn("[matches] notify MATCH_CONFIRMED failed", nErr?.message ?? nErr);

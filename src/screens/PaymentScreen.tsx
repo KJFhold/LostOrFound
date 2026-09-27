@@ -1,16 +1,18 @@
-// src/screens/PaymentScreen.tsx
+﻿// src/screens/PaymentScreen.tsx
 import React, { useState } from 'react';
 import { View, Text, Button, Alert, TextInput } from 'react-native';
 import { usePaymentSheet } from '../hooks/usePaymentSheet';
 
+import { useI18n } from "../i18n/I18nProvider";
 export default function PaymentScreen() {
+  const { t } = useI18n();
   const { startPayment } = usePaymentSheet();
   const [amountKr, setAmountKr] = useState('199'); // default 199 kr
 
   const onPay = async () => {
     const parsed = parseInt(amountKr, 10);
     if (isNaN(parsed) || parsed <= 0) {
-      Alert.alert('Ugyldig beløp', 'Skriv inn et positivt heltall i kroner.');
+      Alert.alert(t("payment.legacy.invalid.amount"), t("payment.legacy.enter.a.positive.whole.number.in.nok"));
       return;
     }
     const amountOre = parsed * 100;
@@ -18,19 +20,19 @@ export default function PaymentScreen() {
     try {
       const ok = await startPayment({ amountOre, merchantName: 'Lost or Found' });
       if (ok) {
-        Alert.alert('Betaling gjennomført 🎉', `Beløp: ${parsed} kr`);
+        Alert.alert(t("payment.legacy.payment.completed.2"), `BelÃ¸p: ${parsed} kr`);
       }
     } catch (err: any) {
-      Alert.alert('Betaling feilet', err?.message ?? 'Ukjent feil');
+      Alert.alert(t("payment.legacy.payment.failed"), err?.message ?? t("payment.legacy.unknown.error"));
     }
   };
 
   return (
     <View style={{ flex: 1, gap: 12, padding: 16, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 18, fontWeight: '600' }}>Stripe betaling</Text>
+      <Text style={{ fontSize: 18, fontWeight: '600' }}>{t("payment.legacy.stripe.payment")}</Text>
 
       <View style={{ gap: 8 }}>
-        <Text>Beløp (kroner):</Text>
+        <Text>{t("payment.legacy.amount.nok")}</Text>
         <TextInput
           value={amountKr}
           onChangeText={setAmountKr}
@@ -45,7 +47,7 @@ export default function PaymentScreen() {
         />
       </View>
 
-      <Button title={`Betal ${amountKr} kr`} onPress={onPay} />
+      <Button title={t("payment.legacy.pay.amount", { amount: amountKr })} onPress={onPay} />
     </View>
   );
 }

@@ -8,35 +8,35 @@ import { registerPushInstallation, sendPushTest, unregisterPushInstallation } fr
 
 export default function PushSettingsScreen() {
   const router = useRouter();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
 
   const run = async (fn: () => Promise<any>, success: string) => {
-    try { setBusy(true); await fn(); Alert.alert(language === "en" ? "Done" : "Ferdig", success); }
-    catch (e: any) { Alert.alert(language === "en" ? "Could not complete" : "Kunne ikke fullføre", e?.message ?? String(e)); }
+    try { setBusy(true); await fn(); Alert.alert(t("pushSettings.done"), success); }
+    catch (e: any) { Alert.alert(t("pushSettings.could.not.complete"), e?.message ?? String(e)); }
     finally { setBusy(false); }
   };
 
   return <>
     <Stack.Screen options={{ headerShown: false }} />
     <View style={styles.safe}>
-      <PremiumHeader title={language === "en" ? "Push notifications" : "Pushvarsler"} onBack={() => router.back()} />
+      <PremiumHeader title={t("pushSettings.push.notifications")} onBack={() => router.back()} />
       <View style={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.title}>{language === "en" ? "Receive important updates" : "Motta viktige oppdateringer"}</Text>
-          <Text style={styles.body}>{language === "en" ? "Enable push notifications for matches, messages and future area alerts. You can disable them again at any time." : "Aktiver pushvarsler for treff, meldinger og fremtidige områdevarsler. Du kan slå dem av igjen når som helst."}</Text>
-          <Pressable disabled={busy} style={[styles.primary, busy && styles.disabled]} onPress={() => run(async () => { await registerPushInstallation(language); setEnabled(true); }, language === "en" ? "Push notifications are enabled." : "Pushvarsler er aktivert.")}>
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{language === "en" ? "Enable push notifications" : "Aktiver pushvarsler"}</Text>}
+          <Text style={styles.title}>{t("pushSettings.receive.important.updates")}</Text>
+          <Text style={styles.body}>{t("pushSettings.enable.push.notifications.for.matches.messages.and.futu")}</Text>
+          <Pressable disabled={busy} style={[styles.primary, busy && styles.disabled]} onPress={() => run(async () => { await registerPushInstallation(language); setEnabled(true); }, t("pushSettings.push.notifications.are.enabled"))}>
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("pushSettings.enable.push.notifications")}</Text>}
           </Pressable>
-          <Pressable disabled={busy || !enabled} style={[styles.secondary, (!enabled || busy) && styles.disabled]} onPress={() => run(sendPushTest, language === "en" ? "A test notification was sent." : "Et testvarsel ble sendt.")}>
-            <Text style={styles.secondaryText}>{language === "en" ? "Send test notification" : "Send testvarsel"}</Text>
+          <Pressable disabled={busy || !enabled} style={[styles.secondary, (!enabled || busy) && styles.disabled]} onPress={() => run(sendPushTest, t("pushSettings.a.test.notification.was.sent"))}>
+            <Text style={styles.secondaryText}>{t("pushSettings.send.test.notification")}</Text>
           </Pressable>
-          <Pressable disabled={busy} style={styles.textButton} onPress={() => run(async () => { await unregisterPushInstallation(); setEnabled(false); }, language === "en" ? "Push notifications were disabled for this installation." : "Pushvarsler ble deaktivert for denne installasjonen.")}>
-            <Text style={styles.textButtonText}>{language === "en" ? "Disable on this device" : "Deaktiver på denne enheten"}</Text>
+          <Pressable disabled={busy} style={styles.textButton} onPress={() => run(async () => { await unregisterPushInstallation(); setEnabled(false); }, t("pushSettings.push.notifications.were.disabled.for.this.installation"))}>
+            <Text style={styles.textButtonText}>{t("pushSettings.disable.on.this.device")}</Text>
           </Pressable>
         </View>
-        <Text style={styles.note}>{language === "en" ? "Area alerts are not active yet. This step only establishes secure device registration and test delivery." : "Områdevarsler er ikke aktive ennå. Dette steget etablerer bare sikker enhetsregistrering og testutsending."}</Text>
+        <Text style={styles.note}>{t("pushSettings.area.alerts.are.not.active.yet.this.step.only.establish")}</Text>
       </View>
     </View>
   </>;

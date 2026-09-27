@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { View, Text, Button, ActivityIndicator, Alert } from "react-native";
 import { useStripe } from "@stripe/stripe-react-native";
 import { API_BASE_URL } from "../src/lib/config";
 
+import { useI18n } from "../src/i18n/I18nProvider";
 export default function PaymentScreen() {
+  const { t } = useI18n();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -22,13 +24,12 @@ export default function PaymentScreen() {
       }
 
       const data = await response.json();
-      if (!data?.clientSecret) {
-        throw new Error("Mangler clientSecret i responsen");
-      }
+      if (!data?.clientSecret) throw new Error("Mangler clientSecret i responsen");
+
       return data.clientSecret;
     } catch (error: any) {
       console.error("Fetch-feil:", error);
-      Alert.alert("Feil", "Kunne ikke snakke med serveren");
+      Alert.alert(t("payment.test.error"), t("payment.test.could.not.contact.the.server"));
       return null;
     }
   };
@@ -48,21 +49,24 @@ export default function PaymentScreen() {
 
     if (error) {
       console.log("initPaymentSheet error:", error);
-      Alert.alert("Stripe-feil", error.message);
+      Alert.alert(t("payment.test.stripe.error"), error.message);
     }
+
     setInitializing(false);
   };
 
   const openPaymentSheet = async () => {
     if (loading) return;
     setLoading(true);
+
     const { error } = await presentPaymentSheet();
     if (error) {
       console.log("presentPaymentSheet error:", error);
       Alert.alert("PaymentSheet", error.message);
     } else {
-      Alert.alert("Suksess", "Betaling gjennomført!");
+      Alert.alert(t("payment.test.success"), t("payment.test.payment.completed"));
     }
+
     setLoading(false);
   };
 
@@ -74,19 +78,15 @@ export default function PaymentScreen() {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator />
-        <Text>Laster betalingsdata...</Text>
+        <Text>{t("payment.test.loading.payment.data")}</Text>
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ marginBottom: 20 }}>Trykk for å betale 199 kr</Text>
-      <Button
-        title={loading ? "Åpner..." : "Betal nå"}
-        onPress={openPaymentSheet}
-        disabled={loading}
-      />
+      <Text style={{ marginBottom: 20 }}>{t("payment.test.tap.to.pay.nok.199")}</Text>
+      <Button title={loading ? t("payment.test.opening") : t("payment.test.pay.now")} onPress={openPaymentSheet} disabled={loading} />
     </View>
   );
 }

@@ -25,7 +25,7 @@ type Notif = {
   agg_count?: number | null;
   target_status?: "ok" | "missing";
   target_kind?: "match" | "report" | "chat" | "unknown" | string;
-  report_context?: { id: string; type?: string | null; category?: string | null; subcategory_key?: string | null; subcategory_custom?: string | null; color?: string | null; brand?: string | null; location_label?: string | null } | null;
+  report_context?: any;
 };
 
 function timeAgo(iso: string, language: "no" | "en") {
@@ -84,7 +84,6 @@ function notificationBody(n: Notif, language: "no" | "en", t: Translate) {
   if (type === "REPORT_EXPIRED") return t("notifications.a.case.is.no.longer.active.in.new.matching");
   if (type === "REPORT_ARCHIVED") return t("notifications.a.found.report.has.been.archived.and.is.available.in.your.history");
   if (type === "OBSERVATION_MESSAGE") return language === "en" ? "You received a new message about an observation or possible find." : "Du har fått en ny melding om en observasjon eller et mulig funn.";
-  if (type === "OBSERVATION_STATUS") return t("notifications.open.the.observation.for.details");
   if (type === "AREA_ALERT_OBSERVATION") return t("notifications.open.the.observation.for.details");
   if (type === "AREA_ALERT" || type === "GEO_ALERT") return language === "en" ? "Reported lost near an area you follow." : "Meldt mistet nær et område du følger.";
   return n.body ? String(n.body) : null;

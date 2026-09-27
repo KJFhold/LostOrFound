@@ -37,54 +37,19 @@ function requestId(value) {
   return v;
 }
 
-
 router.get("/my-purchases", requireUser, async (req, res) => {
   try {
-    const userId = req.user?.id;
-    const { data: orders, error: orderError } = await supaAdmin
-      .from("report_orders")
-      .select("id,report_id,product_code,status,amount_ore,currency,platform,provider,paid_at,created_at,updated_at,report_entitlements(id,status,starts_at,current_period_end,auto_renews,provider)")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    if (orderError) return res.status(400).json({ error: orderError.message });
-    const reportIds = [...new Set((orders || []).map((item) => item.report_id).filter(Boolean))];
-    let reports = [];
-    if (reportIds.length > 0) {
-      const result = await supaAdmin.from("reports")
-        .select("id,title,type,status,subcategory_key,color,location_label,deleted_at")
-        .in("id", reportIds);
-      if (result.error) return res.status(400).json({ error: result.error.message });
-      reports = result.data || [];
-    }
-    const reportMap = new Map(reports.map((report) => [report.id, report]));
-    const normalized = (orders || []).map((order) => {
-      const entitlements = Array.isArray(order.report_entitlements) ? order.report_entitlements : [];
-      const entitlement = entitlements[0] || null;
-      const status = String(entitlement?.status || order.status || "PENDING").toUpperCase();
-      return {
-        id: order.id,
-        reportId: order.report_id,
-        productCode: order.product_code,
-        status,
-        amountOre: order.amount_ore,
-        currency: order.currency,
-        platform: order.platform,
-        provider: entitlement?.provider || order.provider,
-        purchasedAt: order.paid_at || order.created_at,
-        startsAt: entitlement?.starts_at || null,
-        currentPeriodEnd: entitlement?.current_period_end || null,
-        autoRenews: entitlement?.auto_renews === true,
-        report: reportMap.get(order.report_id) || null,
-      };
-    });
-    const activePurchases = normalized.filter((item) => item.status === "ACTIVE");
-    const purchaseHistory = normalized.filter((item) => item.status !== "ACTIVE");
-    return res.json({ activePurchases, purchaseHistory });
-  } catch (error) {
-    return res.status(500).json({ error: error?.message || "PURCHASE_HISTORY_LOAD_FAILED" });
-  }
+    const userId=req.user?.id;
+    const ordersResult=await supaAdmin.from("report_orders").select("id,report_id,product_code,status,amount_ore,currency,platform,provider,paid_at,created_at,report_entitlements(id,status,starts_at,current_period_end,auto_renews,provider)").eq("user_id",userId).order("created_at",{ascending:false});
+    if(ordersResult.error)return res.status(400).json({error:ordersResult.error.message});
+    const ids=[...new Set((ordersResult.data||[]).map(x=>x.report_id).filter(Boolean))];
+    let reports=[];
+    if(ids.length){const result=await supaAdmin.from("reports").select("id,title,type,status,category,subcategory_key,subcategory_custom,color,brand,location_label,deleted_at").in("id",ids);if(result.error)return res.status(400).json({error:result.error.message});reports=result.data||[];}
+    const byId=new Map(reports.map(x=>[x.id,x]));
+    const items=(ordersResult.data||[]).map(order=>{const entitlement=(Array.isArray(order.report_entitlements)?order.report_entitlements:[])[0]||null;return{id:order.id,reportId:order.report_id,productCode:order.product_code,status:String(entitlement?.status||order.status||"PENDING").toUpperCase(),amountOre:order.amount_ore,currency:order.currency,platform:order.platform,provider:entitlement?.provider||order.provider,purchasedAt:order.paid_at||order.created_at,startsAt:entitlement?.starts_at||null,currentPeriodEnd:entitlement?.current_period_end||null,autoRenews:entitlement?.auto_renews===true,report:byId.get(order.report_id)||null};});
+    return res.json({activePurchases:items.filter(x=>x.status==="ACTIVE"),purchaseHistory:items.filter(x=>x.status!=="ACTIVE")});
+  }catch(error){return res.status(500).json({error:error?.message||"PURCHASE_HISTORY_LOAD_FAILED"});}
 });
-
 router.get("/catalog", requireUser, async (req, res) => {
   try {
     const { data, error } = await supaAdmin.from("product_catalog")

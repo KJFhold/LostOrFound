@@ -141,7 +141,7 @@ async function getUserNotification(id, userId) {
   return data || null;
 }
 
-async function getReportContext(notification,userId){const type=String(notification?.type||"").toUpperCase(),entityType=String(notification?.entity_type||"").toLowerCase(),entityId=String(notification?.entity_id||"");let reportId=entityType==="report"?entityId:null;if(entityType==="observation"||["AREA_ALERT_OBSERVATION","OBSERVATION_MESSAGE","OBSERVATION_STATUS"].includes(type)){const q=await supaAdmin.from("area_alert_observations").select("report_id").eq("id",entityId).maybeSingle();if(!q.error)reportId=q.data?.report_id||null;}if(entityType==="area_alert_campaign"||["AREA_ALERT","GEO_ALERT"].includes(type)){const q=await supaAdmin.from("geo_alert_campaigns").select("report_id").eq("id",entityId).maybeSingle();if(!q.error)reportId=q.data?.report_id||null;}if(["match","chat"].includes(entityType)||["NEW_MATCH","MATCH_CONFIRMED","NEW_MESSAGE"].includes(type)){const q=await supaAdmin.from("matches").select("lost_id,found_id").eq("id",entityId).maybeSingle();const ids=[q.data?.lost_id,q.data?.found_id].filter(Boolean);if(!q.error&&ids.length){const own=await supaAdmin.from("reports").select("id").in("id",ids).eq("user_id",userId).is("deleted_at",null).limit(1);if(!own.error)reportId=own.data?.[0]?.id||null;}}if(!reportId)return null;const q=await supaAdmin.from("reports").select("id,type,category,subcategory_key,subcategory_custom,color,brand,location_label").eq("id",reportId).eq("user_id",userId).is("deleted_at",null).maybeSingle();return q.error?null:q.data||null;}
+async function getReportContext(n,userId){const type=String(n?.type||"").toUpperCase(),et=String(n?.entity_type||"").toLowerCase(),eid=String(n?.entity_id||"");let rid=et==="report"?eid:null;if(et==="observation"||["AREA_ALERT_OBSERVATION","OBSERVATION_MESSAGE","OBSERVATION_STATUS"].includes(type)){const q=await supaAdmin.from("area_alert_observations").select("report_id").eq("id",eid).maybeSingle();if(!q.error)rid=q.data?.report_id||null;}if(et==="area_alert_campaign"||["AREA_ALERT","GEO_ALERT"].includes(type)){const q=await supaAdmin.from("geo_alert_campaigns").select("report_id").eq("id",eid).maybeSingle();if(!q.error)rid=q.data?.report_id||null;}if(!rid)return null;const q=await supaAdmin.from("reports").select("id,type,category,subcategory_key,subcategory_custom,color,brand,location_label").eq("id",rid).is("deleted_at",null).maybeSingle();return q.error?null:q.data||null;}
 // GET /notifications?limit=50
 router.get("/", requireUser, async (req, res) => {
   try {
@@ -163,14 +163,13 @@ router.get("/", requireUser, async (req, res) => {
       (data || []).map(async (n) => {
         try {
           const target = await resolveNotificationTarget(n, userId);
-          const reportContext = await getReportContext(n, userId);
-          return { ...n, target_status: target.ok ? "ok" : "missing", target_kind: target.kind, report_context: reportContext };
+          const reportContext=await getReportContext(n,userId);
+          return {...n,target_status:target.ok?"ok":"missing",target_kind:target.kind,report_context:reportContext};
         } catch {
           return {
             ...n,
             target_status: "missing",
             target_kind: String(n?.entity_type || "unknown"),
-            report_context: null,
           };
         }
       })

@@ -29,6 +29,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 type ReportType = "LOST" | "FOUND";  
 type ColorOption = { label: string; value: string };  
 type RegionCode = "NO" | "US" | "GB" | "EU" | "OTHER";  
+type Translate = ReturnType<typeof useI18n>["t"];  
 
 function inferRegionCodeFromLocale(locale?: string): RegionCode {  
   const region = String(locale || "").split("-").pop()?.toUpperCase() || "";  
@@ -39,13 +40,17 @@ function inferRegionCodeFromLocale(locale?: string): RegionCode {
   return "OTHER";  
 }  
 
-function formatDistanceDisplay(meters: number | undefined, region: RegionCode, language: "no" | "en") {  
+function formatDistanceDisplay(
+  meters: number | undefined,
+  region: RegionCode,
+  translate: Translate
+) {  
   if (meters == null) return "—";  
   if (region === "US") {  
     const feet = meters * 3.28084;  
-    if (feet < 1000) return `${Math.round(feet)} ${language === "en" ? "ft" : "fot"}`;  
+    if (feet < 1000) return `${Math.round(feet)} ${translate("report.create.ft")}`;  
     const miles = meters / 1609.344;  
-    return `${miles.toFixed(miles >= 10 ? 0 : 1)} ${language === "en" ? "mi" : "miles"}`;  
+    return `${miles.toFixed(miles >= 10 ? 0 : 1)} ${translate("report.create.mi")}`;  
   }  
   if (meters >= 1000) return `${(meters / 1000).toFixed(0)} km`;  
   return `${meters} m`;  
@@ -321,21 +326,19 @@ class ReportApiError extends Error {
 
 function showReportApiError(
   error: any,
-  language: "no" | "en",
-  router: ReturnType<typeof useRouter>
+  router: ReturnType<typeof useRouter>,
+  translate: Translate
 ) {
   const code = String(error?.code || "").toUpperCase();
 
   if (code === "LOST_REPORT_WEEKLY_LIMIT") {
     Alert.alert(
-      language === "en" ? "Report limit reached" : "Grensen er nådd",
-      language === "en"
-        ? "You can create up to two lost reports within seven days. You can still edit or follow your existing cases under My cases."
-        : "Du kan opprette maksimalt to mistet-rapporter i løpet av syv dager. Du kan fortsatt redigere eller følge opp eksisterende saker under Mine saker.",
+      translate("report.create.report.limit.reached"),
+      translate("report.create.you.can.create.up.to.two"),
       [
-        { text: language === "en" ? "OK" : "OK", style: "cancel" },
+        { text: translate("report.create.ok"), style: "cancel" },
         {
-          text: language === "en" ? "Open My cases" : "Gå til Mine saker",
+          text: translate("report.create.open.my.cases"),
           onPress: () => router.replace("/my-reports"),
         },
       ]
@@ -345,14 +348,12 @@ function showReportApiError(
 
   if (code === "ACCOUNT_REQUIRED_FOR_LOST") {
     Alert.alert(
-      language === "en" ? "Account required" : "Konto kreves",
-      language === "en"
-        ? "You need a regular account to create a lost report. Guests can only report found items."
-        : "Du trenger en vanlig konto for å opprette en mistet-rapport. Gjest kan kun registrere funn.",
+      translate("report.create.account.required"),
+      translate("report.create.you.need.a.regular.account.to"),
       [
-        { text: language === "en" ? "Cancel" : "Avbryt", style: "cancel" },
+        { text: translate("report.create.cancel"), style: "cancel" },
         {
-          text: language === "en" ? "Log in" : "Logg inn",
+          text: translate("report.create.log.in"),
           onPress: () => router.push({ pathname: "/(auth)/login", params: { returnTo: "/(report)/create-report", intent: "lost" } }),
         },
       ]
@@ -362,20 +363,16 @@ function showReportApiError(
 
   if (code === "CRITICAL_EDIT_COOLDOWN") {
     Alert.alert(
-      language === "en" ? "Change temporarily locked" : "Endringen er midlertidig låst",
-      language === "en"
-        ? "You recently changed the item, time or area. Please try again later."
-        : "Du har nylig endret gjenstand, tidspunkt eller område. Prøv igjen senere."
+      translate("report.create.change.temporarily.locked"),
+      translate("report.create.you.recently.changed.the.item.time")
     );
     return true;
   }
 
   if (code === "CRITICAL_EDIT_LIMIT_REACHED") {
     Alert.alert(
-      language === "en" ? "Major change limit reached" : "Grensen for større endringer er nådd",
-      language === "en"
-        ? "You can still update the description, color, brand and reward."
-        : "Du kan fortsatt oppdatere beskrivelse, farge, merke og finnerlønn."
+      translate("report.create.major.change.limit.reached"),
+      translate("report.create.you.can.still.update.the.description")
     );
     return true;
   }
@@ -385,7 +382,7 @@ function showReportApiError(
 
 export default function CreateReportScreen() {  
   const router = useRouter();  
-  const { language } = useI18n();  
+  const { language, t } = useI18n();  
   const regionCode = useMemo(() => inferRegionCodeFromLocale(typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().locale : ""), []);  
   const rewardEnabled = regionCode === "NO";  
   const activeCurrency = rewardCurrencyCode(regionCode);  
@@ -424,13 +421,13 @@ export default function CreateReportScreen() {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);  
   const [uploading, setUploading] = useState(false);  
- // Lagret-modal (proff)  
+ // Saved confirmation modal.  
  const [savedOpen, setSavedOpen] = useState(false);  
  const [savedReportId, setSavedReportId] = useState<string | null>(null);  
  const [savedCount, setSavedCount] = useState<number>(0);  
  const [savedType, setSavedType] = useState<ReportType>('LOST');  
-  const savedTypeLabel = savedType === "FOUND" ? (language === "en" ? "found item" : "funn") : (language === "en" ? "lost item" : "mistet gjenstand");  
-  // Sted (autofyll fra Google reverse geocode, men redigerbart)  
+  const savedTypeLabel = savedType === "FOUND" ? (t("report.create.found.item")) : (t("report.create.lost.item"));  
+  // Editable place label populated by reverse geocoding.  
   const [locationLabel, setLocationLabel] = useState<string>((draft as any).locationLabel ?? "");  
   const [locationLabelTouched, setLocationLabelTouched] = useState(false);  
   useEffect(() => {  
@@ -439,7 +436,7 @@ export default function CreateReportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps  
   }, [params?.type]);  
   const type: ReportType = (draft.type as ReportType) ?? "LOST";  
-  // FOUND: nøyaktig sted med liten radius (default 10m). LOST: radius kan være mer usikker og velges.  
+  // FOUND uses an exact location with a small radius (default 10 m). LOST can use a broader user-selected radius.  
   useEffect(() => {  
     if (type !== "FOUND") return;  
     const loc = (draft as any).location;  
@@ -476,7 +473,7 @@ export default function CreateReportScreen() {
     }),  
     [latitude, longitude]  
   );    
-  // Autofyll sted basert på lat/lng (via backend /geo/reverse).  
+  // Autofill the place from latitude and longitude through the backend reverse-geocoding endpoint.  
   // Overstyrer ikke hvis bruker har skrevet manuelt.  
   // Viktig: Beskytter mot race der en eldre reverse-geocode respons (gammel posisjon) kommer etter en nyere.  
   const geoReqRef = useRef(0);  
@@ -489,7 +486,7 @@ export default function CreateReportScreen() {
       const lat0 = latitude;  
       const lng0 = longitude;  
       try {  
-        const label = await reverseGeocodeToLabel(lat0, lng0, { language: language === "en" ? "en" : "no" });  
+        const label = await reverseGeocodeToLabel(lat0, lng0, { language });  
         if (!alive) return;  
         if (reqId !== geoReqRef.current) return;  
         if (lat0 !== latitude || lng0 !== longitude) return;  
@@ -505,9 +502,9 @@ export default function CreateReportScreen() {
       alive = false;  
     };  
   }, [latitude, longitude, locationLabelTouched, setField]);  
-const whatLabel = type === "FOUND" ? (language === "en" ? "What did you find?" : "Hva fant du?") : (language === "en" ? "What did you lose?" : "Hva har du mistet?");  
+const whatLabel = type === "FOUND" ? (t("report.create.what.did.you.find")) : (t("report.create.what.did.you.lose"));  
   const categoryLabel = useMemo(  
-    () => localizeCategoryLabel(CATEGORIES.find((c) => c.value === category)?.label, language) ?? (language === "en" ? "Choose category" : "Velg kategori"),  
+    () => localizeCategoryLabel(CATEGORIES.find((c) => c.value === category)?.label, language) ?? (t("report.create.choose.category")),  
     [category, language]  
   );  
   const subOptions = useMemo(() => SUBCATEGORIES[category] || [], [category]);  
@@ -516,7 +513,7 @@ const whatLabel = type === "FOUND" ? (language === "en" ? "What did you find?" :
     if (!q) return subOptions;  
     return subOptions.filter((s) => s.label.toLowerCase().includes(q));  
   }, [subQuery, subOptions]);  
-  // Global søk: normaliser (diakritikk + whitespace)  
+  // Global search normalization for diacritics and whitespace.  
   const normalize = (s: string) =>  
     s  
       .toLowerCase()  
@@ -545,8 +542,8 @@ const whatLabel = type === "FOUND" ? (language === "en" ? "What did you find?" :
     if (q.length < 2) return [];  
     return subIndex.filter((x) => x.search.includes(q)).slice(0, 30);  
   }, [objectQuery, subIndex]);    
-  // Underkategori-browsing (ikke låst til kategori): basert på global subIndex.  
-  // Brukes når bruker vil browse uten å bruke objekt-søk (valgfritt).  
+  // Subcategory browsing across all categories, based on the global index.  
+  // Used when the user browses instead of using item search.  
   const filteredSubIndex = useMemo(() => {  
     const q = normalize(subQuery);  
     if (!q) return subIndex;  
@@ -565,27 +562,27 @@ const whatLabel = type === "FOUND" ? (language === "en" ? "What did you find?" :
     return out;  
   }, [filteredSubIndex]);  
 const subcategoryLabel = useMemo(() => {
-    if (!subcategoryKey) return language === "en" ? "Choose item" : "Velg gjenstand";
+    if (!subcategoryKey) return t("report.create.choose.item");
     const hit = subOptions.find((s) => s.value === subcategoryKey)?.label;
-    return localizeObjectLabel(subcategoryKey, hit, language) || (language === "en" ? "Choose item" : "Velg gjenstand");
+    return localizeObjectLabel(subcategoryKey, hit, language) || (t("report.create.choose.item.2"));
   }, [subcategoryKey, subOptions, language]);
   const colorLabel = useMemo(  
-    () => (color ? localizeColorLabel(COLORS.find((c) => c.value === color)?.label, language) ?? (language === "en" ? "Choose color" : "Velg farge") : (language === "en" ? "Choose color" : "Velg farge")),  
+    () => (color ? localizeColorLabel(COLORS.find((c) => c.value === color)?.label, language) ?? (t("report.create.choose.color")) : (t("report.create.choose.color.2"))),  
     [color, language]  
   );  
   const color2Label = useMemo(  
     () =>  
       colorSecondary  
-        ? localizeColorLabel(COLORS.find((c) => c.value === colorSecondary)?.label, language) ?? (language === "en" ? "Choose secondary color" : "Velg tilleggsfarge")  
-        : (language === "en" ? "Choose secondary color" : "Velg tilleggsfarge"),  
+        ? localizeColorLabel(COLORS.find((c) => c.value === colorSecondary)?.label, language) ?? (t("report.create.choose.secondary.color"))  
+        : (t("report.create.choose.secondary.color.2")),  
     [colorSecondary, language]  
   );  
-  const radiusLabel = formatDistanceDisplay(effectiveRadiusMeters, regionCode, language);  
-  // Tid  
+  const radiusLabel = formatDistanceDisplay(effectiveRadiusMeters, regionCode, t);  
+  // Time.  
   const init = fmtLocal(occurredAtISO);  
   const [dateStr, setDateStr] = useState(init.date);  
   const [timeStr, setTimeStr] = useState(init.time);  
-  // Synk lokal date/time når draft rehydreres (occurredAtISO kan komme etter mount)  
+  // Synchronize local date and time when the draft is restored after mount.  
   useEffect(() => {  
     if (!occurredAtISO) return;  
     // Ikke overstyr hvis bruker allerede har skrevet noe  
@@ -594,7 +591,7 @@ const subcategoryLabel = useMemo(() => {
     if (v.date) setDateStr(v.date);  
     if (v.time) setTimeStr(v.time);  
   }, [occurredAtISO]);  
-  // Responsive default "nå"
+  // Set the current time as the responsive default.
   useEffect(() => {
     if (occurredAtISO || isEditMode) return;
     const now = new Date();
@@ -621,7 +618,7 @@ const subcategoryLabel = useMemo(() => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.error ?? (language === "en" ? "Could not load case." : "Kunne ikke hente saken."));
+        if (!res.ok) throw new Error(json?.error ?? (t("report.create.could.not.load.case")));
         const report = json?.report;
         const existingPaths = (json?.images ?? []).map((x: any) => String(x?.path ?? "")).filter(Boolean);
         if (existingPaths.length) {
@@ -631,7 +628,7 @@ const subcategoryLabel = useMemo(() => {
             if (signedRes.ok) setExistingImageUrls(existingPaths.map((path: string) => signedJson?.urls?.[path]).filter(Boolean));
           } catch { setExistingImageUrls([]); }
         } else setExistingImageUrls([]);
-        if (!report) throw new Error(language === "en" ? "Case was not found." : "Fant ikke saken.");
+        if (!report) throw new Error(t("report.create.case.was.not.found"));
 
         if (!alive) return;
         editLoadedRef.current = editReportId;
@@ -660,7 +657,7 @@ const subcategoryLabel = useMemo(() => {
         setDateStr(when.date);
         setTimeStr(when.time);
       } catch (e: any) {
-        Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not load case." : "Kunne ikke hente saken."));
+        Alert.alert(t("report.create.error"), e?.message ?? (t("report.create.could.not.load.case.2")));
       } finally {
         if (alive) setEditLoading(false);
       }
@@ -675,7 +672,7 @@ const subcategoryLabel = useMemo(() => {
     if (subOpen) setSubOpen(false);  
     if (objectOpen) setObjectOpen(false);  
   };  
-  // Fjernet "Sett"-knappen: synk dato/tid når brukeren er ferdig å skrive  
+  // Synchronize date and time when editing finishes.  
   const syncDateTimeToDraft = () => {  
     const iso = toISO(dateStr.trim(), timeStr.trim());  
     if (iso) setField("occurredAtISO" as any, iso);  
@@ -723,7 +720,7 @@ const subcategoryLabel = useMemo(() => {
     closeMenus();  
   };  
   const computedTitle = useMemo(() => {  
-    const typeLabel = type === "FOUND" ? (language === "en" ? "Found" : "Funnet") : (language === "en" ? "Lost" : "Mistet");  
+    const typeLabel = type === "FOUND" ? (t("report.create.found")) : (t("report.create.lost"));  
     const petCustom =  
       category === "PETS" && subcategoryKey === "CUSTOM" && subcategoryCustom.trim() ? subcategoryCustom.trim() : "";  
     const parts = [  
@@ -732,22 +729,22 @@ const subcategoryLabel = useMemo(() => {
       subcategoryKey ? localizeCategoryLabel(subcategoryLabel, language) : "",  
       petCustom,  
       brand?.trim(),  
-      colorLabel !== (language === "en" ? "Choose color" : "Velg farge") ? colorLabel : "",  
+      colorLabel !== (t("report.create.choose.color.3")) ? colorLabel : "",  
       colorSecondary ? color2Label : "",  
     ].filter(Boolean);  
     return parts.join(" • ");  
   }, [type, categoryLabel, subcategoryKey, subcategoryLabel, subcategoryCustom, category, brand, colorLabel, colorSecondary, color2Label, language]);  
   const validationKey = {
-    item: language === "en" ? "Item" : "Gjenstand",
-    color: language === "en" ? "Primary color" : "Hovedfarge",
-    time: language === "en" ? "Date and time" : "Dato og tidspunkt",
-    location: language === "en" ? "Confirmed location" : "Bekreftet sted",
+    item: t("report.create.item"),
+    color: t("report.create.primary.color"),
+    time: t("report.create.date.and.time"),
+    location: t("report.create.confirmed.location"),
   };
   const validate = () => {
     const missing: string[] = [];
     let firstY = 0;
     if (!subcategoryKey) { missing.push(validationKey.item); firstY = objectSectionY; }
-    if (category === "PETS" && subcategoryKey === "CUSTOM" && !subcategoryCustom.trim()) { missing.push(language === "en" ? "Type of pet" : "Type husdyr"); firstY = firstY || objectSectionY; }
+    if (category === "PETS" && subcategoryKey === "CUSTOM" && !subcategoryCustom.trim()) { missing.push(t("report.create.type.of.pet")); firstY = firstY || objectSectionY; }
     if (!color) { missing.push(validationKey.color); firstY = firstY || detailsSectionY; }
     const iso = toISO(dateStr.trim(), timeStr.trim());
     if (!iso) { missing.push(validationKey.time); firstY = firstY || timeSectionY; }
@@ -756,7 +753,7 @@ const subcategoryLabel = useMemo(() => {
     }
     if (type === "LOST" && rewardEnabled) {
       const n = Number(rewardNOK || "0");
-      if (!Number.isFinite(n) || n < 0) missing.push(language === "en" ? "Valid reward amount" : "Gyldig finnerlønn");
+      if (!Number.isFinite(n) || n < 0) missing.push(t("report.create.valid.reward.amount"));
     }
     if (missing.length) {
       setValidationMissing(missing);
@@ -777,7 +774,7 @@ const subcategoryLabel = useMemo(() => {
         setContinueWithoutImage(false);
       }  
     } catch (e: any) {  
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open image library." : "Kunne ikke åpne bildebiblioteket."));  
+      Alert.alert(t("report.create.error.2"), e?.message ?? (t("report.create.could.not.open.image.library")));  
     }  
   };  
   const addFromCamera = async () => {  
@@ -788,7 +785,7 @@ const subcategoryLabel = useMemo(() => {
         setContinueWithoutImage(false);
       }  
     } catch (e: any) {  
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Could not open camera." : "Kunne ikke åpne kamera."));  
+      Alert.alert(t("report.create.error.3"), e?.message ?? (t("report.create.could.not.open.camera")));  
     }  
   };  
   const removePending = (uri: string) => setPendingImages((prev) => prev.filter((u) => u !== uri));
@@ -809,10 +806,8 @@ const subcategoryLabel = useMemo(() => {
       if (failedUris.length > 0) {
         setRetryImageUris(failedUris);
         Alert.alert(
-          language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
-          language === "en"
-            ? `${failedUris.length} image(s) still could not be uploaded. Check your connection and try again.`
-            : `${failedUris.length} bilde(r) kunne fortsatt ikke lastes opp. Kontroller nettverket og prøv igjen.`
+          t("report.create.the.image.could.not.be.uploaded"),
+          t("report.create.p0.image.s.still.could.not", { p0: failedUris.length })
         );
         return;
       }
@@ -826,8 +821,8 @@ const subcategoryLabel = useMemo(() => {
       setSavedOpen(true);
     } catch (error: any) {
       Alert.alert(
-        language === "en" ? "The image could not be uploaded" : "Bildet kunne ikke lastes opp",
-        error?.message ?? (language === "en" ? "Please try again." : "Prøv igjen.")
+        t("report.create.the.image.could.not.be.uploaded.2"),
+        error?.message ?? (t("report.create.please.try.again"))
       );
     } finally {
       setUploading(false);
@@ -885,7 +880,7 @@ const subcategoryLabel = useMemo(() => {
       const secondary = colorSecondary && colorSecondary !== color ? colorSecondary : "";  
       const secondaryLabel = secondary ? (COLORS.find((c) => c.value === secondary)?.label || secondary) : "";  
       const descriptionBase = description?.trim() || "";  
-      const extraLine = secondaryLabel ? `${language === "en" ? "Secondary color" : "Tilleggsfarge"}: ${localizeColorLabel(secondaryLabel, language)}` : "";  
+      const extraLine = secondaryLabel ? `${t("report.create.secondary.color")}: ${localizeColorLabel(secondaryLabel, language)}` : "";  
       const descriptionFull = (descriptionBase || extraLine)  
         ? [descriptionBase, extraLine].filter(Boolean).join("\n")  
         : undefined;  
@@ -908,10 +903,10 @@ const subcategoryLabel = useMemo(() => {
         color: color.trim() || undefined,  
         brand: brand.trim() || undefined,  
         occurred_at: when,  
-        // ✅ VIKTIG: backend forventer lat/lng på toppnivå  
+        // The backend expects latitude and longitude at the top level.  
         lat: latitude,  
         lng: longitude,  
-        // ✅ VIKTIG: send radius til backend, ellers blir matching pin-basert  
+        // Send the radius to the backend to avoid pin-only matching.  
         radius_m: effectiveRadiusMeters ?? undefined,  
         location_label: locationLabel?.trim() || undefined,
         search_areas: searchAreas,  
@@ -992,7 +987,7 @@ const subcategoryLabel = useMemo(() => {
           // Hvis du ikke er innlogget, vil Storage-policyer for "authenticated" feile.  
           // (For gjester: vi flytter opplasting til backend i neste steg.)  
           if (!sessInfo?.hasSession) {  
-            // OK: opplasting går via backend (server-side) og kan fungere uten klient-session.  
+            // Uploads use the backend and can work without a client session.  
             log("upload note", "ingen session i klienten (gjest)");  
           }  
           const results = await Promise.allSettled(  
@@ -1051,11 +1046,11 @@ const subcategoryLabel = useMemo(() => {
         return;
       }
 
-      if (showReportApiError(e, language, router)) return;
-      const fallback = language === "en" ? "Could not save the case. Please try again." : "Kunne ikke lagre saken. Prøv igjen.";
+      if (showReportApiError(e, router, t)) return;
+      const fallback = t("report.create.could.not.save.the.case.please");
       const msg = e instanceof ReportApiError ? (e.serverMessage || fallback) : (e?.message || fallback);
       console.log("[create-report] submit error:", msg);
-      Alert.alert(language === "en" ? "Could not save" : "Kunne ikke lagre", msg);
+      Alert.alert(t("report.create.could.not.save"), msg);
     } finally {
       setSaving(false);
       networkSubmitRef.current = false;
@@ -1092,7 +1087,7 @@ const subcategoryLabel = useMemo(() => {
       <Stack.Screen options={{ headerShown: false }} />  
       <View style={styles.safe}>  
         <PremiumHeader
-          title={isEditMode ? (language === "en" ? "Edit lost report" : "Rediger mistet-rapport") : type === "FOUND" ? (language === "en" ? "Report found" : "Registrer funn") : (language === "en" ? "Report lost" : "Registrer mistet")}
+          title={isEditMode ? (t("report.create.edit.lost.report")) : type === "FOUND" ? (t("report.create.report.found")) : (t("report.create.report.lost"))}
           onBack={() => {
             try {
               router.back();
@@ -1119,7 +1114,7 @@ const subcategoryLabel = useMemo(() => {
                   closeMenus();  
                 }}  
               >  
-                <Text style={[styles.segmentedTxt, type === "LOST" && styles.segmentedTxtOn]}>{language === "en" ? "Lost" : "Mistet"}</Text>  
+                <Text style={[styles.segmentedTxt, type === "LOST" && styles.segmentedTxtOn]}>{t("report.create.lost.2")}</Text>  
               </Pressable>  
               <Pressable  
                 style={[styles.segmentedItem, type === "FOUND" && styles.segmentedItemOn]}  
@@ -1128,14 +1123,14 @@ const subcategoryLabel = useMemo(() => {
                   closeMenus();  
                 }}  
               >  
-                <Text style={[styles.segmentedTxt, type === "FOUND" && styles.segmentedTxtOn]}>{language === "en" ? "Found" : "Funnet"}</Text>  
+                <Text style={[styles.segmentedTxt, type === "FOUND" && styles.segmentedTxtOn]}>{t("report.create.found.2")}</Text>  
               </Pressable>  
             </View>  
             {/* CARD: Objekt */}
             <View onLayout={(e) => setObjectSectionY(e.nativeEvent.layout.y)} style={[styles.card, objectOpen && styles.cardOnTop]}>
               <Text style={styles.h2}>{whatLabel}</Text>
-              <Text style={styles.caption}>{language === "en" ? "Item" : "Gjenstand"}</Text>
-              <Text style={styles.muted}>{language === "en" ? "Type what was lost or found. For example: wedding ring, keys, sunglasses, dog." : "Skriv hva du har mistet eller funnet. For eksempel: giftering, nøkler, solbriller, hund."}</Text>
+              <Text style={styles.caption}>{t("report.create.item.2")}</Text>
+              <Text style={styles.muted}>{t("report.create.type.what.was.lost.or.found")}</Text>
 
               <View style={[styles.selectWrap, objectOpen && styles.selectWrapOn]} pointerEvents="box-none">
                 <TextInput
@@ -1153,7 +1148,7 @@ const subcategoryLabel = useMemo(() => {
                     setObjectQuery(txt);
                     if (!objectOpen) setObjectOpen(true);
                   }}
-                  placeholder={language === "en" ? "Type e.g. wedding ring, keys, sunglasses…" : "Skriv f.eks. giftering, nøkler, solbriller…"}
+                  placeholder={t("report.create.type.e.g.wedding.ring.keys")}
                   placeholderTextColor={theme.colors.muted}
                   autoCorrect={false}
                   autoCapitalize="none"
@@ -1162,11 +1157,11 @@ const subcategoryLabel = useMemo(() => {
                   <View style={[styles.selectMenu, { top: 52 }]} pointerEvents="auto">
                     {objectQuery.trim().length < 2 ? (
                       <View style={{ padding: theme.space.md }}>
-                        <Text style={styles.muted}>{language === "en" ? "Type at least 2 characters to search." : "Skriv minst 2 tegn for å søke."}</Text>
+                        <Text style={styles.muted}>{t("report.create.type.at.least.2.characters.to")}</Text>
                       </View>
                     ) : filteredObjects.length === 0 ? (
                       <View style={{ padding: theme.space.md }}>
-                        <Text style={styles.muted}>{language === "en" ? "No item found. Try another word, or describe it in the comment field." : "Fant ikke gjenstanden. Prøv et annet ord, eller beskriv den i kommentarfeltet."}</Text>
+                        <Text style={styles.muted}>{t("report.create.no.item.found.try.another.word")}</Text>
                       </View>
                     ) : (
                       <ScrollView style={styles.objectResultsScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
@@ -1186,19 +1181,19 @@ const subcategoryLabel = useMemo(() => {
               </View>
 
               <View onLayout={(e) => setCategoryAnchorY(e.nativeEvent.layout.y)} />
-              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Selected item" : "Valgt gjenstand"}</Text>
+              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{t("report.create.selected.item")}</Text>
               <View style={[styles.selectedObjectBox, validationMissing.some((x) => x === "Item" || x === "Gjenstand") && styles.inputError]}>
                 <Text style={styles.selectedObjectTxt}>{subcategoryLabel}</Text>
               </View>
 
               {category === "PETS" && subcategoryKey === "CUSTOM" && (
                 <>
-                  <Text style={[styles.caption, { marginTop: theme.space.md }]}>{language === "en" ? "Specify pet" : "Spesifiser husdyr"}</Text>
+                  <Text style={[styles.caption, { marginTop: theme.space.md }]}>{t("report.create.specify.pet")}</Text>
                   <TextInput
                     style={styles.input}
                     value={subcategoryCustom}
                     onChangeText={(v) => setField("subcategoryCustom" as any, v)}
-                    placeholder={language === "en" ? "E.g. guinea pig, turtle, goat…" : "F.eks. marsvin, skilpadde, geit…"}
+                    placeholder={t("report.create.e.g.guinea.pig.turtle.goat")}
                     placeholderTextColor={theme.colors.muted}
                   />
                 </>
@@ -1206,10 +1201,10 @@ const subcategoryLabel = useMemo(() => {
             </View>
             {/* CARD: Detaljer */}
             <View onLayout={(e) => setDetailsSectionY(e.nativeEvent.layout.y)} style={[styles.card, (colorOpen || color2Open) && styles.cardOnTop, validationMissing.includes(validationKey.color) && styles.cardError]}>  
-              <Text style={styles.h2}>{language === "en" ? "Details" : "Detaljer"}</Text>  
+              <Text style={styles.h2}>{t("report.create.details")}</Text>  
               <View style={[styles.row, { marginTop: theme.space.md, alignItems: "flex-start" }]}>  
                 <View style={{ flex: 1 }}>  
-                  <Text style={styles.caption}>{language === "en" ? "Primary color" : "Hovedfarge"}</Text>  
+                  <Text style={styles.caption}>{t("report.create.primary.color.2")}</Text>  
                   <Pressable  
                     style={[styles.selectBtn, validationMissing.includes(validationKey.color) && styles.inputError]}  
                     onPress={() => {  
@@ -1246,15 +1241,15 @@ const subcategoryLabel = useMemo(() => {
                             setColorOpen(false);  
                           }}  
                         >  
-                          <Text style={styles.selectItemTxt}>{language === "en" ? "Remove color" : "Fjern farge"}</Text>  
+                          <Text style={styles.selectItemTxt}>{t("report.create.remove.color")}</Text>  
                         </Pressable>  
                       )}  
                       </ScrollView>  
                     </View>  
                   )}  
 {/* removed stray token */}  
-                  {validationMissing.includes(validationKey.color) && <Text style={styles.errorText}>{language === "en" ? "Choose a primary color." : "Velg en hovedfarge."}</Text>}
-                  <Text style={[styles.caption, { marginTop: theme.space.md }]}>{language === "en" ? "Secondary color (optional)" : "Tilleggsfarge (valgfritt)"}</Text>  
+                  {validationMissing.includes(validationKey.color) && <Text style={styles.errorText}>{t("report.create.choose.a.primary.color")}</Text>}
+                  <Text style={[styles.caption, { marginTop: theme.space.md }]}>{t("report.create.secondary.color.optional")}</Text>  
                   <Pressable  
                     style={styles.selectBtn}  
                     onPress={() => {  
@@ -1305,7 +1300,7 @@ const subcategoryLabel = useMemo(() => {
                             setColor2Open(false);  
                           }}  
                         >  
-                          <Text style={styles.selectItemTxt}>{language === "en" ? "Remove secondary color" : "Fjern tilleggsfarge"}</Text>  
+                          <Text style={styles.selectItemTxt}>{t("report.create.remove.secondary.color")}</Text>  
                         </Pressable>  
                       )}  
                       </ScrollView>  
@@ -1314,32 +1309,32 @@ const subcategoryLabel = useMemo(() => {
 </View>  
                 <View style={{ width: 8 }} />  
                 <View style={{ flex: 1 }}>  
-                  <Text style={styles.caption}>{language === "en" ? "Brand (optional)" : "Merke (valgfri)"}</Text>  
+                  <Text style={styles.caption}>{t("report.create.brand.optional")}</Text>  
                   <TextInput  
                     style={styles.input}  
                     value={brand}  
                     onChangeText={(v) => setField("brand" as any, v)}  
-                    placeholder={language === "en" ? "Apple" : "Apple"}  
+                    placeholder={t("report.create.apple")}  
                     placeholderTextColor={theme.colors.muted}  
                   />  
                 </View>  
               </View>
 
-              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Comment (optional)" : "Kommentar (valgfritt)"}</Text>
+              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{t("report.create.comment.optional")}</Text>
               <TextInput
                 style={[styles.input, { minHeight: 76 }]}
                 value={description}
                 onChangeText={(v) => setField("description" as any, v)}
-                placeholder={language === "en" ? "Describe important details, identifiers or handover preferences." : "Beskriv kjennetegn, detaljer eller preferanse for overlevering."}
+                placeholder={t("report.create.describe.important.details.identifiers.or.handover")}
                 placeholderTextColor={theme.colors.muted}
                 multiline
               />
             </View>
             {/* CARD: Tid & sted */}
             <View onLayout={(e) => setTimeSectionY(e.nativeEvent.layout.y)} style={[styles.card, validationMissing.includes(validationKey.time) && styles.cardError, validationMissing.includes(validationKey.location) && styles.cardError]}>  
-              <Text style={styles.h2}>{language === "en" ? "Time & place" : "Tid & sted"}</Text>  
-              <Text style={styles.muted}>{language === "en" ? `Radius: ${type === "FOUND" ? `${radiusLabel} (precise)` : radiusLabel}` : `Radius: ${type === "FOUND" ? `${radiusLabel} (nøyaktig)` : radiusLabel}`}</Text>  
-              <Text style={styles.caption}>{type === "LOST" ? (language === "en" ? "Estimated time lost" : "Antatt tidspunkt mistet") : (language === "en" ? "Time (if known)" : "Tidspunkt (hvis kjent)")}</Text>  
+              <Text style={styles.h2}>{t("report.create.time.place")}</Text>  
+              <Text style={styles.muted}>{t("report.create.radius.p0", { p0: type === "FOUND" ? `${radiusLabel} (precise)` : radiusLabel })}</Text>  
+              <Text style={styles.caption}>{type === "LOST" ? (t("report.create.estimated.time.lost")) : (t("report.create.time.if.known"))}</Text>  
               <View style={[styles.row, { alignItems: "center" }]}>  
                 <TextInput  
                   style={[styles.input, styles.inputCompact, { flex: 1 }]}  
@@ -1361,19 +1356,19 @@ const subcategoryLabel = useMemo(() => {
               </View>  
               <View style={[styles.row, { justifyContent: "flex-start", marginTop: theme.space.md }]}>  
                 <Pressable style={styles.chip} onPress={setNow}>  
-                  <Text style={styles.chipTxt}>{language === "en" ? "Now" : "Nå"}</Text>  
+                  <Text style={styles.chipTxt}>{t("report.create.now")}</Text>  
                 </Pressable>  
                 <Pressable style={styles.chip} onPress={() => shiftMinutes(-60)}>  
-                  <Text style={styles.chipTxt}>{language === "en" ? "-1 h" : "-1 t"}</Text>  
+                  <Text style={styles.chipTxt}>{t("report.create.1.h")}</Text>  
                 </Pressable>  
                 <Pressable style={styles.chip} onPress={() => shiftMinutes(-1440)}>  
-                  <Text style={styles.chipTxt}>{language === "en" ? "-1 day" : "-1 dag"}</Text>  
+                  <Text style={styles.chipTxt}>{t("report.create.1.day")}</Text>  
                 </Pressable>  
               </View>  
-              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Position" : "Posisjon"}</Text>  
-              <Text style={styles.muted}>{language === "en" ? "Add one or more possible places, a route or an area." : "Legg til ett eller flere mulige steder, en rute eller et område."}</Text>
-              {searchAreas.length > 0 && <Text style={styles.confirmedText}>{language === "en" ? `${searchAreas.length} search area(s) saved` : `${searchAreas.length} søkeområder lagret`}</Text>}    
-              <Text style={[locationConfirmed ? styles.confirmedText : styles.unconfirmedText]}>{locationConfirmed ? (language === "en" ? "✓ Location confirmed" : "✓ Sted bekreftet") : (language === "en" ? "Location must be confirmed on the map" : "Stedet må bekreftes på kartet")}</Text>
+              <Text style={[styles.caption, { marginTop: theme.space.lg }]}>{t("report.create.position")}</Text>  
+              <Text style={styles.muted}>{t("report.create.add.one.or.more.possible.places")}</Text>
+              {searchAreas.length > 0 && <Text style={styles.confirmedText}>{t("report.create.p0.search.area.s.saved", { p0: searchAreas.length })}</Text>}    
+              <Text style={[locationConfirmed ? styles.confirmedText : styles.unconfirmedText]}>{locationConfirmed ? (t("report.create.location.confirmed")) : (t("report.create.location.must.be.confirmed.on.the"))}</Text>
               <Pressable style={[styles.mapPreviewWrap, validationMissing.includes(validationKey.location) && styles.inputError]} onPress={openMap}>  
                 <View pointerEvents="none" style={styles.mapPreviewInner}>  
                   <MapView  
@@ -1389,15 +1384,15 @@ const subcategoryLabel = useMemo(() => {
                     <Marker coordinate={{ latitude, longitude }} />  
                   </MapView>  
                   <View style={styles.mapPreviewBadge}>  
-                    <Text style={styles.mapPreviewBadgeTxt}>{language === "en" ? "Tap to choose on map" : "Trykk for å velge på kart"}</Text>  
+                    <Text style={styles.mapPreviewBadgeTxt}>{t("report.create.tap.to.choose.on.map")}</Text>  
                   </View>  
                 </View>  
               </Pressable>  
               <Pressable style={[styles.primaryBtn, { marginTop: theme.space.md }]} onPress={openMap}>  
-                <Text style={styles.primaryBtnTxt}>{language === "en" ? "Choose on map" : "Velg på kart"}</Text>  
+                <Text style={styles.primaryBtnTxt}>{t("report.create.choose.on.map")}</Text>  
               </Pressable>  
             </View>
-<Text style={[styles.caption, { marginTop: theme.space.lg }]}>{language === "en" ? "Place" : "Sted"}</Text>  
+<Text style={[styles.caption, { marginTop: theme.space.lg }]}>{t("report.create.place")}</Text>  
 <TextInput  
   style={styles.input}  
   value={locationLabel}  
@@ -1406,17 +1401,17 @@ const subcategoryLabel = useMemo(() => {
     setLocationLabelTouched(true);  
     setField('locationLabel' as any, v);  
   }}  
-  placeholder={language === "en" ? "Address, place or place description" : "Adresse, sted eller stedsbeskrivelse"}  
+  placeholder={t("report.create.address.place.or.place.description")}  
   placeholderTextColor={theme.colors.muted}  
 />  
-            {/* Finnerlønn */}  
+            {/* Reward */}  
             {type === "LOST" && rewardEnabled && (  
               <View style={styles.card}>  
-                <Text style={styles.h2}>{language === "en" ? "Reward (optional)" : "Finnerlønn (valgfritt)"}</Text>  
+                <Text style={styles.h2}>{t("report.create.reward.optional")}</Text>  
                 <Text style={styles.muted}>  
-                  {language === "en" ? `Reward is optional. Currency for this market: ${activeCurrency}.` : `Finnerlønn er frivillig. Valuta for dette markedet: ${activeCurrency}.`}  
+                  {t("report.create.reward.is.optional.currency.for.this", { p0: activeCurrency })}  
                 </Text>  
-                <Text style={styles.caption}>{language === "en" ? "Suggestions" : "Forslag"}</Text>  
+                <Text style={styles.caption}>{t("report.create.suggestions")}</Text>  
                 <View style={[styles.row, { flexWrap: "wrap", gap: 8, marginTop: theme.space.sm }]}>  
                   {[0, 50, 100, 250].map((n) => (  
                     <Pressable  
@@ -1428,7 +1423,7 @@ const subcategoryLabel = useMemo(() => {
                     </Pressable>  
                   ))}  
                 </View>  
-                <Text style={[styles.caption, { marginTop: theme.space.md }]}>{language === "en" ? `Custom amount (${activeCurrency})` : `Eget beløp (${activeCurrency})`}</Text>  
+                <Text style={[styles.caption, { marginTop: theme.space.md }]}>{t("report.create.custom.amount.p0", { p0: activeCurrency })}</Text>  
                 <TextInput  
                   style={styles.input}  
                   value={String(rewardNOK)}  
@@ -1441,9 +1436,9 @@ const subcategoryLabel = useMemo(() => {
             )}  
             {type === "LOST" && !rewardEnabled && (  
               <View style={styles.card}>  
-                <Text style={styles.h2}>{language === "en" ? "Reward" : "Finnerlønn"}</Text>  
+                <Text style={styles.h2}>{t("report.create.reward")}</Text>  
                 <Text style={styles.muted}>  
-                  {language === "en" ? `Local currency support is not enabled for ${activeCurrency} yet. Reward is currently available in Norway only.` : `Lokal valutastøtte for ${activeCurrency} er ikke aktivert ennå. Finnerlønn er foreløpig kun tilgjengelig i Norge.`}  
+                  {t("report.create.local.currency.support.is.not.enabled", { p0: activeCurrency })}  
                 </Text>  
               </View>  
             )}  
@@ -1453,39 +1448,39 @@ const subcategoryLabel = useMemo(() => {
                 onPress={() => router.push("/premium-status")}  
               >  
                 <Text style={styles.selectBtnTxt}>  
-                  {language === "en" ? "View premium status" : "Se premiumstatus"}  
+                  {t("report.create.view.premium.status")}  
                 </Text>  
               </Pressable>  
             )}  
             {/* Bilder */}
             <View onLayout={(e) => setImagesSectionY(e.nativeEvent.layout.y)} style={styles.card}>  
-              <Text style={styles.h2}>{language === "en" ? "Images" : "Bilder"}</Text>  
+              <Text style={styles.h2}>{t("report.create.images")}</Text>  
               <View style={[styles.row, { marginTop: theme.space.md }]}>  
                 <Pressable style={styles.primaryBtn} onPress={addFromGallery}>  
-                  <Text style={styles.primaryBtnTxt}>{language === "en" ? "Choose from gallery" : "Velg fra galleri"}</Text>  
+                  <Text style={styles.primaryBtnTxt}>{t("report.create.choose.from.gallery")}</Text>  
                 </Pressable>  
                 <View style={{ width: 8 }} />  
                 <Pressable style={styles.primaryBtn} onPress={addFromCamera}>  
-                  <Text style={styles.primaryBtnTxt}>{language === "en" ? "Take photo" : "Ta bilde"}</Text>  
+                  <Text style={styles.primaryBtnTxt}>{t("report.create.take.photo")}</Text>  
                 </Pressable>  
               </View>  
               {existingImageUrls.length > 0 && (
                 <View style={{ marginTop: theme.space.md }}>
-                  <Text style={styles.caption}>{language === "en" ? "Already saved" : "Allerede lagret"}</Text>
+                  <Text style={styles.caption}>{t("report.create.already.saved")}</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: theme.space.sm }}>
                     {existingImageUrls.map((uri) => <Image key={uri} source={{ uri }} style={{ width: 120, height: 120, borderRadius: theme.radius.md, marginRight: theme.space.md, marginBottom: theme.space.md }} />)}
                   </View>
                 </View>
               )}
               {pendingImages.length === 0 ? (  
-                <Text style={styles.muted}>{language === "en" ? "No images selected yet." : "Ingen bilder valgt ennå."}</Text>  
+                <Text style={styles.muted}>{t("report.create.no.images.selected.yet")}</Text>  
               ) : (  
                 <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: theme.space.md }}>  
                   {pendingImages.map((uri) => (  
                     <View key={uri} style={{ marginRight: theme.space.md, marginBottom: theme.space.md }}>  
                       <Image source={{ uri }} style={{ width: 120, height: 120, borderRadius: theme.radius.md }} />  
                       <Pressable onPress={() => removePending(uri)} style={{ marginTop: theme.space.xs }}>  
-                        <Text style={{ color: theme.colors.danger, fontWeight: "800" }}>{language === "en" ? "Remove" : "Fjern"}</Text>  
+                        <Text style={{ color: theme.colors.danger, fontWeight: "800" }}>{t("report.create.remove")}</Text>  
                       </Pressable>  
                     </View>  
                   ))}  
@@ -1496,16 +1491,16 @@ const subcategoryLabel = useMemo(() => {
             <Pressable style={[styles.ctaBtn, saving && { opacity: 0.7 }]} onPress={() => void onSubmit()} disabled={saving || uploading || editLoading}>  
               <Text style={styles.ctaTxt}>  
                 {saving
-                  ? (language === "en" ? "Saving…" : "Lagrer…")
+                  ? (t("report.create.saving"))
                   : editLoading
-                  ? (language === "en" ? "Loading case…" : "Laster sak…")
+                  ? (t("report.create.loading.case"))
                   : uploading
-                  ? (language === "en" ? "Saving & uploading…" : "Lagrer & laster opp…")
+                  ? (t("report.create.saving.uploading"))
                   : isEditMode
-                  ? (language === "en" ? "Save changes" : "Lagre endringer")
+                  ? (t("report.create.save.changes"))
                   : type === "FOUND"
-                  ? (language === "en" ? "Report found item" : "Meld inn funn")
-                  : (language === "en" ? "Report lost item" : "Meld inn mistet gjenstand")}              </Text>  
+                  ? (t("report.create.report.found.item"))
+                  : (t("report.create.report.lost.item"))}              </Text>  
             </Pressable>  
             <View style={{ height: theme.space.xl }} />  
           </ScrollView>  
@@ -1514,42 +1509,42 @@ const subcategoryLabel = useMemo(() => {
    <View style={modalStyles.backdrop}>
      <View style={modalStyles.card}>
        <View style={[modalStyles.icon, { backgroundColor: "#FEF3C7" }]}><Text style={[modalStyles.iconTxt, { color: "#B45309" }]}>!</Text></View>
-       <Text style={modalStyles.title}>{language === "en" ? "The report is incomplete" : "Rapporten er ikke fullstendig"}</Text>
-       <Text style={modalStyles.body}>{language === "en" ? "Complete the highlighted fields before submitting the report." : "Fyll ut de markerte feltene før rapporten sendes inn."}</Text>
+       <Text style={modalStyles.title}>{t("report.create.the.report.is.incomplete")}</Text>
+       <Text style={modalStyles.body}>{t("report.create.complete.the.highlighted.fields.before.submitting")}</Text>
        <View style={styles.missingList}>{validationMissing.map((item) => <Text key={item} style={styles.missingItem}>• {item}</Text>)}</View>
-       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => setValidationOpen(false)}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Go to first missing field" : "Gå til første manglende felt"}</Text></Pressable>
+       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => setValidationOpen(false)}><Text style={modalStyles.btnPrimaryTxt}>{t("report.create.go.to.first.missing.field")}</Text></Pressable>
      </View>
    </View>
  </Modal>
  <Modal visible={photoPromptOpen} transparent animationType="fade" onRequestClose={() => setPhotoPromptOpen(false)}>
    <View style={modalStyles.backdrop}><View style={modalStyles.card}>
      <View style={[modalStyles.icon, { backgroundColor: "#EEF2FF" }]}><Text style={[modalStyles.iconTxt, { color: theme.colors.primary }]}>+</Text></View>
-     <Text style={modalStyles.title}>{language === "en" ? "Continue without a photo?" : "Fortsette uten bilde?"}</Text>
-     <Text style={modalStyles.body}>{language === "en" ? "A photo can make the item easier to identify and improve possible matches." : "Et bilde kan gjøre gjenstanden enklere å identifisere og forbedre mulige treff."}</Text>
+     <Text style={modalStyles.title}>{t("report.create.continue.without.a.photo")}</Text>
+     <Text style={modalStyles.body}>{t("report.create.a.photo.can.make.the.item")}</Text>
      <View style={modalStyles.actions}>
-       <Pressable style={[modalStyles.btn, modalStyles.btnOutline]} onPress={() => { setPhotoPromptOpen(false); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true })); }}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Add photo" : "Legg til bilde"}</Text></Pressable>
-       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current({ allowWithoutImage: true }); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Continue" : "Fortsett"}</Text></Pressable>
+       <Pressable style={[modalStyles.btn, modalStyles.btnOutline]} onPress={() => { setPhotoPromptOpen(false); requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, imagesSectionY - 12), animated: true })); }}><Text style={modalStyles.btnOutlineTxt}>{t("report.create.add.photo")}</Text></Pressable>
+       <Pressable style={[modalStyles.btn, modalStyles.btnPrimary]} onPress={() => { setPhotoPromptOpen(false); setContinueWithoutImage(true); setTimeout(() => { void submitRef.current({ allowWithoutImage: true }); }, 0); }}><Text style={modalStyles.btnPrimaryTxt}>{t("report.create.continue")}</Text></Pressable>
      </View>
    </View></View>
  </Modal>
  <Modal visible={limitDialogOpen} transparent animationType="fade" onRequestClose={() => setLimitDialogOpen(false)}>
    <View style={modalStyles.backdrop}><View style={modalStyles.card}>
      <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
-     <Text style={modalStyles.title}>{language === "en" ? "Report limit reached" : "Grensen er nådd"}</Text>
-     <Text style={modalStyles.body}>{language === "en" ? "You can normally create up to two lost reports within seven days. Test mode is enabled for this account." : "Du kan normalt opprette maksimalt to mistet-rapporter i løpet av sju dager. Testmodus er aktivert for denne kontoen."}</Text>
-     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => {setLimitDialogOpen(false);setTimeout(()=>void submitRef.current({ testOverrideWeeklyLimit: true, allowWithoutImage: true }),0)}}><Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "Create anyway" : "Opprett likevel"}</Text></Pressable>
-     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setLimitDialogOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
-     <Pressable style={styles.dialogTextBtn} onPress={() => setLimitDialogOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Cancel" : "Avbryt"}</Text></Pressable>
+     <Text style={modalStyles.title}>{t("report.create.report.limit.reached.2")}</Text>
+     <Text style={modalStyles.body}>{t("report.create.you.can.normally.create.up.to")}</Text>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} onPress={() => {setLimitDialogOpen(false);setTimeout(()=>void submitRef.current({ testOverrideWeeklyLimit: true, allowWithoutImage: true }),0)}}><Text style={modalStyles.btnPrimaryTxt}>{t("report.create.create.anyway")}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setLimitDialogOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{t("report.create.open.my.cases.2")}</Text></Pressable>
+     <Pressable style={styles.dialogTextBtn} onPress={() => setLimitDialogOpen(false)}><Text style={styles.dialogText}>{t("report.create.cancel.2")}</Text></Pressable>
    </View></View>
  </Modal>
  <Modal visible={imageRetryOpen} transparent animationType="fade" onRequestClose={() => setImageRetryOpen(false)}>
    <View style={modalStyles.backdrop}><View style={modalStyles.card}>
      <View style={[modalStyles.icon,{backgroundColor:"#FEF3C7"}]}><Text style={[modalStyles.iconTxt,{color:"#B45309"}]}>!</Text></View>
-     <Text style={modalStyles.title}>{language === "en" ? "The report was saved" : "Rapporten er lagret"}</Text>
-     <Text style={modalStyles.body}>{language === "en" ? "The image could not be uploaded. Try again now, or add it later from My cases." : "Bildet kunne ikke lastes opp. Prøv igjen nå, eller legg det til senere fra Mine saker."}</Text>
-     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} disabled={uploading} onPress={() => void retryImagesOnly()}><Text style={modalStyles.btnPrimaryTxt}>{uploading ? (language === "en" ? "Uploading image…" : "Laster opp bilde…") : (language === "en" ? "Try image again" : "Prøv bildet på nytt")}</Text></Pressable>
-     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setImageRetryOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "Open My cases" : "Gå til Mine saker"}</Text></Pressable>
-     <Pressable style={styles.dialogTextBtn} onPress={() => setImageRetryOpen(false)}><Text style={styles.dialogText}>{language === "en" ? "Close" : "Lukk"}</Text></Pressable>
+     <Text style={modalStyles.title}>{t("report.create.the.report.was.saved")}</Text>
+     <Text style={modalStyles.body}>{t("report.create.the.image.could.not.be.uploaded.3")}</Text>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnPrimary, { marginTop: 16 }]} disabled={uploading} onPress={() => void retryImagesOnly()}><Text style={modalStyles.btnPrimaryTxt}>{uploading ? (t("report.create.uploading.image")) : (t("report.create.try.image.again"))}</Text></Pressable>
+     <Pressable style={[modalStyles.btn, modalStyles.btnStacked, modalStyles.btnOutline, { marginTop: 10 }]} onPress={() => {setImageRetryOpen(false);router.replace("/my-reports")}}><Text style={modalStyles.btnOutlineTxt}>{t("report.create.open.my.cases.3")}</Text></Pressable>
+     <Pressable style={styles.dialogTextBtn} onPress={() => setImageRetryOpen(false)}><Text style={styles.dialogText}>{t("report.create.close")}</Text></Pressable>
    </View></View>
  </Modal>
  {/* Lagret-modal (proff) */}  
@@ -1564,15 +1559,15 @@ const subcategoryLabel = useMemo(() => {
        <View style={modalStyles.icon}>  
          <Text style={modalStyles.iconTxt}>✓</Text>  
        </View>  
-       <Text style={modalStyles.title}>{isEditMode ? (language === "en" ? "Case updated" : "Sak oppdatert") : (language === "en" ? "Case created" : "Sak opprettet")}</Text>  
+       <Text style={modalStyles.title}>{isEditMode ? (t("report.create.case.updated")) : (t("report.create.case.created"))}</Text>  
        <Text style={modalStyles.body}>  
          {isEditMode
-           ? (language === "en" ? "The report has been updated. Matches are being refreshed if relevant changes were made." : "Rapporten er oppdatert. Treff oppdateres på nytt hvis relevante endringer ble gjort.")
+           ? (t("report.create.the.report.has.been.updated.matches"))
            : savedReportId
            ? (savedCount > 0
-               ? (language === "en" ? `Case created (${savedTypeLabel}). Suggested matches: ${savedCount}` : `Sak opprettet (${savedTypeLabel}). Foreslåtte treff: ${savedCount}`)
-               : (language === "en" ? `Case created (${savedTypeLabel}). Matches are updating…` : `Sak opprettet (${savedTypeLabel}). Treff oppdateres…`))
-           : (language === "en" ? `Case created (${savedTypeLabel}).` : `Sak opprettet (${savedTypeLabel}).`)}  
+               ? (t("report.create.case.created.p0.suggested.matches.p1", { p0: savedTypeLabel, p1: savedCount }))
+               : (t("report.create.case.created.p0.matches.are.updating", { p0: savedTypeLabel })))
+           : (t("report.create.case.created.p0", { p0: savedTypeLabel }))}  
        </Text>  
        <View style={modalStyles.actions}>  
          <Pressable  
@@ -1582,7 +1577,7 @@ const subcategoryLabel = useMemo(() => {
              router.replace("/");  
            }}  
          >  
-           <Text style={modalStyles.btnOutlineTxt}>{language === "en" ? "To home" : "Til forsiden"}</Text>  
+           <Text style={modalStyles.btnOutlineTxt}>{t("report.create.to.home")}</Text>  
          </Pressable>  
          <Pressable  
            style={[modalStyles.btn, modalStyles.btnPrimary, !savedReportId && { opacity: 0.4 }]}  
@@ -1593,7 +1588,7 @@ const subcategoryLabel = useMemo(() => {
              router.push({ pathname: "/match", params: { reportId: savedReportId } });  
            }}  
          >  
-           <Text style={modalStyles.btnPrimaryTxt}>{language === "en" ? "View matches" : "Se treff"}</Text>  
+           <Text style={modalStyles.btnPrimaryTxt}>{t("report.create.view.matches")}</Text>  
          </Pressable>  
        </View>  
      </Pressable>  
@@ -1659,7 +1654,7 @@ const styles = StyleSheet.create({
     marginTop: theme.space.md,  
     ...theme.shadow.card,  
   },  
-  // Løft kortet over andre når dropdown er åpen (hindrer at meny skjules bak andre cards)  
+  // Raise the card while a dropdown is open so the menu remains visible.  
   inputError: { borderColor: theme.colors.danger, borderWidth: 1.5, backgroundColor: "#FFF7F7" },
   cardError: { borderColor: theme.colors.danger, borderWidth: 1.5 },
   errorText: { marginTop: 7, color: theme.colors.danger, fontWeight: "800", fontSize: 12 },
@@ -1712,7 +1707,7 @@ const styles = StyleSheet.create({
     fontSize: theme.type.body,  
     fontFamily: "Inter_400Regular",  
   },  
-  // Kompakt variant for dato/tid (premium-polish)  
+  // Compact date and time input variant.  
   inputCompact: {  
     marginTop: 0,  
     paddingVertical: 10,  
@@ -1835,7 +1830,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",  
   },  
   ctaTxt: { color: "#fff", fontWeight: "800", fontSize: 16 },  
-  // Kart-preview for posisjon  
+  // Location map preview.  
   mapPreviewWrap: {  
     marginTop: theme.space.sm,  
     borderRadius: theme.radius.lg,  

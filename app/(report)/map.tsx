@@ -19,7 +19,7 @@ export default function MapPickerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ reportType?: ReportType }>();
   const insets = useSafeAreaInsets();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const { draft, setLocation, setField } = useReportDraft();
   const mapRef = useRef<MapView>(null);
 
@@ -55,10 +55,8 @@ export default function MapPickerScreen() {
   }), []);
 
   const limitAlert = () => Alert.alert(
-    language === "en" ? "Maximum three search areas" : "Maksimalt tre søkeområder",
-    language === "en"
-      ? "Delete an existing place, route or area before adding another."
-      : "Slett et eksisterende sted, en rute eller et område før du legger til et nytt."
+    t("report.map.maximum.three.search.areas"),
+    t("report.map.delete.an.existing.place.route.or")
   );
 
   const fitArea = (area: SearchArea) => {
@@ -127,8 +125,8 @@ export default function MapPickerScreen() {
     const minimum = mode === "ROUTE" ? 2 : 3;
     if (workingPoints.length < minimum) {
       Alert.alert(
-        language === "en" ? "More points needed" : "Flere punkter kreves",
-        language === "en" ? `Add at least ${minimum} points.` : `Legg til minst ${minimum} punkter.`
+        t("report.map.more.points.needed"),
+        t("report.map.add.at.least.p0.points", { p0: minimum })
       );
       return;
     }
@@ -189,14 +187,14 @@ export default function MapPickerScreen() {
       setSearching(true);
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (!token) throw new Error(language === "en" ? "Log in to search." : "Logg inn for å søke.");
+      if (!token) throw new Error(t("report.map.log.in.to.search"));
       const url = API_BASE_URL + "/geo/search?q=" + encodeURIComponent(q) + "&language=" + encodeURIComponent(language);
       const response = await fetch(url, { headers: { Authorization: "Bearer " + token } });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json?.error || "ADDRESS_SEARCH_FAILED");
       setAddressResults(json?.results || []);
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Address search failed" : "Adressesøket feilet", e?.message || "");
+      Alert.alert(t("report.map.address.search.failed"), e?.message || "");
     } finally {
       setSearching(false);
     }
@@ -210,8 +208,8 @@ export default function MapPickerScreen() {
   const renderAddressSearch = () => (
     <View style={[styles.searchBox, { top: insets.top + 66 }]}>
       <View style={styles.searchRow}>
-        <TextInput style={styles.searchInput} value={addressQuery} onChangeText={setAddressQuery} onSubmitEditing={searchAddress} returnKeyType="search" placeholder={language === "en" ? "Search address or place" : "Søk etter adresse eller sted"} />
-        <Pressable style={styles.searchButton} onPress={searchAddress}><Text style={styles.searchButtonText}>{searching ? "…" : language === "en" ? "Search" : "Søk"}</Text></Pressable>
+        <TextInput style={styles.searchInput} value={addressQuery} onChangeText={setAddressQuery} onSubmitEditing={searchAddress} returnKeyType="search" placeholder={t("report.map.search.address.or.place")} />
+        <Pressable style={styles.searchButton} onPress={searchAddress}><Text style={styles.searchButtonText}>{searching ? "…" : t("report.map.search")}</Text></Pressable>
       </View>
       {addressResults.length > 0 && <View style={styles.searchResults}>{addressResults.map((item) => <Pressable key={item.id || item.label} onPress={() => chooseAddress(item)} style={styles.searchResult}><Text style={styles.searchResultText} numberOfLines={2}>{item.label}</Text></Pressable>)}</View>}
     </View>
@@ -238,13 +236,13 @@ export default function MapPickerScreen() {
   const confirmLost = () => {
     if (workingPoints.length) {
       Alert.alert(
-        language === "en" ? "Finish the area" : "Fullfør området",
-        language === "en" ? "Add or discard the points currently being drawn." : "Legg til eller forkast punktene som tegnes nå."
+        t("report.map.finish.the.area"),
+        t("report.map.add.or.discard.the.points.currently")
       );
       return;
     }
     if (!areas.length) {
-      Alert.alert(language === "en" ? "No search area" : "Ingen søkeområde", language === "en" ? "Add at least one area." : "Legg til minst ett område.");
+      Alert.alert(t("report.map.no.search.area"), t("report.map.add.at.least.one.area"));
       return;
     }
     const primary = areas[0].points[0];
@@ -280,8 +278,8 @@ export default function MapPickerScreen() {
         <View style={[styles.header, { paddingTop: insets.top + 6 }]}> 
           <Pressable onPress={() => router.back()} style={styles.headerButton}><Text style={styles.headerButtonText}>‹</Text></Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{language === "en" ? "Found location" : "Funnsted"}</Text>
-            <Text style={styles.subtitle}>{language === "en" ? "Place one pin where the item was found" : "Plasser én pin der gjenstanden ble funnet"}</Text>
+            <Text style={styles.title}>{t("report.map.found.location")}</Text>
+            <Text style={styles.subtitle}>{t("report.map.place.one.pin.where.the.item")}</Text>
           </View>
         </View>
         {renderAddressSearch()}
@@ -289,10 +287,10 @@ export default function MapPickerScreen() {
           <Marker coordinate={foundPin} draggable onDragEnd={(event) => setFoundPin(event.nativeEvent.coordinate)} />
         </MapView>
         <View style={[styles.panel, { bottom: insets.bottom + 12 }]}> 
-          <Text style={styles.foundHelp}>{language === "en" ? "Tap the map, drag the pin, or use your current position." : "Trykk på kartet, flytt pinnen eller bruk din nåværende posisjon."}</Text>
+          <Text style={styles.foundHelp}>{t("report.map.tap.the.map.drag.the.pin")}</Text>
           <View style={styles.actions}>
-            <Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : language === "en" ? "My location" : "Min posisjon"}</Text></Pressable>
-            <Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{language === "en" ? "Confirm found location" : "Bekreft funnsted"}</Text></Pressable>
+            <Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : t("report.map.my.location")}</Text></Pressable>
+            <Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{t("report.map.confirm.found.location")}</Text></Pressable>
           </View>
         </View>
       </View>
@@ -304,10 +302,10 @@ export default function MapPickerScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}> 
         <Pressable onPress={() => router.back()} style={styles.headerButton}><Text style={styles.headerButtonText}>‹</Text></Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{language === "en" ? "Search areas" : "Søkeområder"}</Text>
-          <Text style={styles.subtitle}>{language === "en" ? `${areas.length} of ${MAX_SEARCH_AREAS} areas` : `${areas.length} av ${MAX_SEARCH_AREAS} områder`}</Text>
+          <Text style={styles.title}>{t("report.map.search.areas")}</Text>
+          <Text style={styles.subtitle}>{t("report.map.p0.of.p1.areas", { p0: areas.length, p1: MAX_SEARCH_AREAS })}</Text>
         </View>
-        <Pressable onPress={undo} style={styles.undo}><Text style={styles.undoText}>{language === "en" ? "Undo" : "Angre"}</Text></Pressable>
+        <Pressable onPress={undo} style={styles.undo}><Text style={styles.undoText}>{t("report.map.undo")}</Text></Pressable>
       </View>
       {renderAddressSearch()}
       <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={initialRegion} onPress={onMapPress}>
@@ -321,11 +319,11 @@ export default function MapPickerScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaList}>
             {areas.map((area, index) => {
               const selected = area.id === selectedAreaId;
-              const detail = area.kind === "POLYGON" ? `${area.points.length} ${language === "en" ? "points" : "punkter"}` : area.kind === "ROUTE" ? `${area.radiusMeters || 500} m ${language === "en" ? "each side" : "hver side"}` : `${area.radiusMeters || 500} m`;
+              const detail = area.kind === "POLYGON" ? `${area.points.length} ${t("report.map.points")}` : area.kind === "ROUTE" ? `${area.radiusMeters || 500} m ${t("report.map.each.side")}` : `${area.radiusMeters || 500} m`;
               return (
                 <Pressable key={area.id} onPress={() => selectArea(area.id)} style={[styles.areaCard, selected && styles.areaCardSelected]}>
                   <Text style={[styles.areaNumber, selected && styles.areaNumberSelected]}>{index + 1}</Text>
-                  <View><Text style={[styles.areaTitle, selected && styles.areaTitleSelected]}>{area.kind === "CIRCLE" ? language === "en" ? "Place" : "Sted" : area.kind === "ROUTE" ? language === "en" ? "Route" : "Rute" : language === "en" ? "Area" : "Område"}</Text><Text style={styles.areaDetail}>{detail}</Text></View>
+                  <View><Text style={[styles.areaTitle, selected && styles.areaTitleSelected]}>{area.kind === "CIRCLE" ? t("report.map.place") : area.kind === "ROUTE" ? t("report.map.route") : t("report.map.area")}</Text><Text style={styles.areaDetail}>{detail}</Text></View>
                 </Pressable>
               );
             })}
@@ -334,36 +332,36 @@ export default function MapPickerScreen() {
 
         {selectedArea ? (
           <View style={styles.selectedBar}>
-            <View style={{ flex: 1 }}><Text style={styles.selectedTitle}>{language === "en" ? "Selected area" : "Valgt område"}</Text><Text style={styles.selectedText}>{language === "en" ? "Adjust, delete, or continue with another area." : "Juster, slett eller fortsett med et nytt område."}</Text></View>
-            <Pressable onPress={deleteSelected} style={styles.deleteButton}><Text style={styles.deleteText}>{language === "en" ? "Delete" : "Slett"}</Text></Pressable>
+            <View style={{ flex: 1 }}><Text style={styles.selectedTitle}>{t("report.map.selected.area")}</Text><Text style={styles.selectedText}>{t("report.map.adjust.delete.or.continue.with.another")}</Text></View>
+            <Pressable onPress={deleteSelected} style={styles.deleteButton}><Text style={styles.deleteText}>{t("report.map.delete")}</Text></Pressable>
           </View>
         ) : (
           <>
             <View style={styles.modes}>
               {(["CIRCLE", "ROUTE", "POLYGON"] as Mode[]).map((item) => (
                 <Pressable key={item} disabled={atLimit} onPress={() => { setMode(item); setWorkingPoints([]); }} style={[styles.mode, mode === item && styles.modeActive, atLimit && styles.disabled]}>
-                  <Text style={[styles.modeText, mode === item && styles.modeTextActive]}>{item === "CIRCLE" ? language === "en" ? "Place" : "Sted" : item === "ROUTE" ? language === "en" ? "Route" : "Rute" : language === "en" ? "Area" : "Område"}</Text>
+                  <Text style={[styles.modeText, mode === item && styles.modeTextActive]}>{item === "CIRCLE" ? t("report.map.place.2") : item === "ROUTE" ? t("report.map.route.2") : t("report.map.area.2")}</Text>
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.help}>{atLimit ? language === "en" ? "Maximum reached. Select an area above to edit or delete it." : "Maksgrensen er nådd. Velg et område over for å redigere eller slette det." : mode === "CIRCLE" ? language === "en" ? "Tap a possible place." : "Trykk på et mulig sted." : language === "en" ? "Tap points in order, then save the shape." : "Trykk punkter i rekkefølge, og lagre deretter formen."}</Text>
+            <Text style={styles.help}>{atLimit ? t("report.map.maximum.reached.select.an.area.above") : mode === "CIRCLE" ? t("report.map.tap.a.possible.place") : t("report.map.tap.points.in.order.then.save")}</Text>
           </>
         )}
 
         {(editableRadius || (!selectedArea && mode !== "POLYGON")) && (
           <>
             <View style={styles.radiusRow}>{RADIUS_OPTIONS.map((m) => <Pressable key={m} onPress={() => changeSelectedRadius(m)} style={[styles.radius, displayedRadius === m && styles.radiusActive]}><Text style={[styles.radiusText, displayedRadius === m && styles.radiusTextActive]}>{m >= 1000 ? `${m / 1000} km` : `${m} m`}</Text></Pressable>)}</View>
-            <Text style={styles.radiusHelp}>{selectedArea?.kind === "ROUTE" ? language === "en" ? `${displayedRadius} m on each side, approximately ${Number(displayedRadius) * 2} m total width.` : `${displayedRadius} m på hver side, omtrent ${Number(displayedRadius) * 2} m total bredde.` : selectedArea?.kind === "CIRCLE" ? language === "en" ? `Radius: ${displayedRadius} m.` : `Radius: ${displayedRadius} m.` : mode === "ROUTE" ? language === "en" ? `${radius} m on each side of the new route.` : `${radius} m på hver side av den nye ruten.` : language === "en" ? `Radius for the new place: ${radius} m.` : `Radius for nytt sted: ${radius} m.`}</Text>
+            <Text style={styles.radiusHelp}>{selectedArea?.kind === "ROUTE" ? t("report.map.p0.m.on.each.side.approximately", { p0: displayedRadius, p1: Number(displayedRadius) * 2 }) : selectedArea?.kind === "CIRCLE" ? t("report.map.radius.p0.m", { p0: displayedRadius }) : mode === "ROUTE" ? t("report.map.p0.m.on.each.side.of", { p0: radius }) : t("report.map.radius.for.the.new.place.p0", { p0: radius })}</Text>
           </>
         )}
 
-        {!selectedArea && mode !== "CIRCLE" && <Pressable onPress={addWorkingArea} disabled={atLimit} style={[styles.secondaryFull, atLimit && styles.disabled]}><Text style={styles.secondaryText}>{language === "en" ? "Save drawn area" : "Lagre tegnet område"}</Text></Pressable>}
+        {!selectedArea && mode !== "CIRCLE" && <Pressable onPress={addWorkingArea} disabled={atLimit} style={[styles.secondaryFull, atLimit && styles.disabled]}><Text style={styles.secondaryText}>{t("report.map.save.drawn.area")}</Text></Pressable>}
 
-        {selectedArea && !atLimit && <Pressable onPress={startNewArea} style={styles.addAnother}><Text style={styles.addAnotherText}>{language === "en" ? "Save and add another area" : "Lagre og legg til nytt område"}</Text></Pressable>}
+        {selectedArea && !atLimit && <Pressable onPress={startNewArea} style={styles.addAnother}><Text style={styles.addAnotherText}>{t("report.map.save.and.add.another.area")}</Text></Pressable>}
 
         <View style={styles.actions}>
-          <Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : language === "en" ? "My location" : "Min posisjon"}</Text></Pressable>
-          <Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{language === "en" ? "Done with areas" : "Ferdig med områder"}</Text></Pressable>
+          <Pressable onPress={centerOnUser} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? "…" : t("report.map.my.location.2")}</Text></Pressable>
+          <Pressable onPress={confirm} style={styles.primary}><Text style={styles.primaryText}>{t("report.map.done.with.areas")}</Text></Pressable>
         </View>
       </View>
     </View>

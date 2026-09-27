@@ -6,6 +6,7 @@ import { theme } from "../../src/ui/theme";
 import { useI18n } from "../../src/i18n/I18nProvider";
 import { API_BASE_URL } from "../../src/lib/config";
 import { supabase } from "../../src/lib/supabase";
+import { categoryLabel, colorLabel, itemLabel, reportSummary } from "../../src/lib/localizedReport";
 
 export default function AreaAlertDetails() {
   const router = useRouter();
@@ -40,15 +41,15 @@ export default function AreaAlertDetails() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>{t("areaAlert.lost.item.near.you")}</Text>
-          <Text style={styles.title}>{report?.title || (t("areaAlert.lost.item"))}</Text>
+          <Text style={styles.title}>{reportSummary(report, language) || (t("areaAlert.lost.item"))}</Text>
           <Text style={styles.meta}>{report?.location_label || ""}</Text>
         </View>
         <View style={styles.card}>
           <Text style={styles.h2}>{t("areaAlert.description")}</Text>
           <Text style={styles.body}>{report?.description || (t("areaAlert.no.description.available"))}</Text>
-          <Text style={styles.row}>{t("areaAlert.category")}: {report?.category || "–"}</Text>
-          <Text style={styles.row}>{t("areaAlert.object")}: {report?.subcategory_key || "–"}</Text>
-          <Text style={styles.row}>{t("areaAlert.color")}: {report?.color || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.category")}: {categoryLabel(report?.category, language) || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.object")}: {itemLabel(report?.subcategory_key, language, report?.category) || "–"}</Text>
+          <Text style={styles.row}>{t("areaAlert.color")}: {colorLabel(report?.color, language) || "–"}</Text>
           <Text style={styles.row}>{t("areaAlert.brand")}: {report?.brand || "–"}</Text>
         </View>
         <View style={styles.card}>

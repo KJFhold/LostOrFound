@@ -1,6 +1,6 @@
 // app/matches/[matchId].tsx  
-// Match-detaljer v2: viser "Sist melding" + hvem (Du/Motpart) + unread-indikator på chat.  
-// Viser alltid "Sist" (valg A), men "Åpne chat" kun når status er CONFIRMED (2A).  
+// Match details v2: shows the latest message, sender, and chat unread indicator.  
+// Always shows latest-message status; chat opens only when status is CONFIRMED.  
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";  
 import {  
   View,  
@@ -25,6 +25,14 @@ import { shortPlace } from "../../src/lib/places";
 import { PremiumHeader } from "../../src/ui/PremiumHeader";  
 import { AuthHeaderAction } from "../../src/ui/AuthHeaderAction";  
 import { useI18n } from "../../src/i18n/I18nProvider";  
+
+import { en } from "../../src/i18n/locales/en";
+import { no } from "../../src/i18n/locales/no";
+import type { TranslationKey } from "../../src/i18n/locales/en";
+function tr(language: "no" | "en", key: TranslationKey): string {
+  return language === "en" ? en[key] : no[key];
+}
+
 type Reason = { k: string; v: any };  
 type ReportFull = {  
   id: string;  
@@ -213,7 +221,7 @@ function formatDistance(meters: any) {
 function formatDays(days: any, language: AppLang = "no") {
   const n = Number(days);
   if (!Number.isFinite(n)) return null;
-  if (n < 1) return language === "en" ? "today" : "i dag";
+  if (n < 1) return tr(language, "matchDetail.today");
   return n.toFixed(1) + " d";
 }  
 function formatTextSim(sim: any) {  
@@ -285,7 +293,7 @@ function subcategoryLabel(cat?: string, sub?: string, language: AppLang = "no") 
   return localizeSubcategoryLabel(cat, sub, language);
 }  
 function prettyHeading(rep: any, language: AppLang = "no") {
-  const typ = rep?.type === "LOST" ? (language === "en" ? "Lost" : "Mistet") : (language === "en" ? "Found" : "Funnet");
+  const typ = rep?.type === "LOST" ? (tr(language, "matchDetail.lost")) : (tr(language, "matchDetail.found"));
   const sub = subcategoryLabel(rep?.category, rep?.subcategory_key, language);
   const col = colorLabel(rep?.color, language);
   const brand = titleCase(rep?.brand);
@@ -301,8 +309,8 @@ function objectComparison(match: MatchFull, language: AppLang = "no") {
   const same = !!lost && !!found && lost.toLowerCase() === found.toLowerCase();
   const value = lost && found ? (same ? lost : `${lost} ↔ ${found}`) : (lost || found || "");
   const note = same || !lost || !found ? null : level >= 2
-    ? (language === "en" ? "Related items" : "Beslektede gjenstander")
-    : (language === "en" ? "Possibly related items" : "Mulig beslektede gjenstander");
+    ? (tr(language, "matchDetail.related.items"))
+    : (tr(language, "matchDetail.possibly.related.items"));
   return { level, same, value, note };
 }
 
@@ -330,7 +338,7 @@ function areaSummaryForMatch(match: any, language: AppLang = "no") {
   const outsideRaw = reasonVal(match.reasons, "outside_radius_m") ?? reasonVal(match.reasons, "distance_outside_m") ?? reasonVal(match.reasons, "outside_area_m");
   const outsideMeters = Number(outsideRaw);
   const radius = reportRadiusMeters(match.lost);
-  const insideText = language === "en" ? "Within selected area" : "Innenfor markert område";
+  const insideText = tr(language, "matchDetail.within.selected.area");
   const outsideText = (v: string | null) => language === "en" ? String(v) + " outside selected area" : String(v) + " utenfor valgt område";
   if (explicitInside === true || explicitInside === "true" || explicitInside === 1 || explicitInside === "1") return insideText;
   if (Number.isFinite(outsideMeters)) {
@@ -341,8 +349,7 @@ function areaSummaryForMatch(match: any, language: AppLang = "no") {
     if (dist <= radius) return insideText;
     return outsideText(formatDistance(dist - radius));
   }
-  if (Number.isFinite(dist)) return language === "en" ? "Distance between reported points: " + formatDistance(distRaw) : "Avstand mellom rapporterte punkter: " + formatDistance(distRaw);
-  return language === "en" ? "Location information missing" : "Stedsinformasjon mangler";
+  if (Number.isFinite(dist)) return tr(language, "matchDetail.distance.between.reported.points.formatdistance.");
 }  
 async function getSignedUrl(path: string, token: string) {  
   const u = `${API_BASE_URL}/storage/signed-download?path=${encodeURIComponent(path)}`;  
@@ -472,7 +479,7 @@ export default function MatchDetailsScreen() {
     await Promise.allSettled([perReport(m.lost), perReport(m.found)]);  
       await fetchLastMessage();  
     } catch (e: any) {  
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Unknown error" : "Ukjent feil"));  
+      Alert.alert(tr(language, "matchDetail.error"), e?.message ?? (tr(language, "matchDetail.unknown.error")));  
     } finally {  
       setLoading(false);  
     }  
@@ -529,7 +536,7 @@ export default function MatchDetailsScreen() {
       // Refresh match  
       await fetchMatch();  
     } catch (e: any) {  
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Unknown error" : "Ukjent feil"));  
+      Alert.alert(tr(language, "matchDetail.error"), e?.message ?? (tr(language, "matchDetail.unknown.error")));  
     }  
   };  
   const openChat = () => {  
@@ -540,7 +547,7 @@ export default function MatchDetailsScreen() {
     const lat = Number(rep?.lat);  
     const lng = Number(rep?.lng);  
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {  
-      Alert.alert(language === "en" ? "Map" : "Kart", language === "en" ? "Map position is missing for this report." : "Kartposisjon mangler for denne rapporten.");  
+      Alert.alert(tr(language, "matchDetail.map"), tr(language, "matchDetail.map.position.is.missing.for.this.report"));  
       return;  
     }  
     const label = encodeURIComponent(rep.location_label || "Funnsted");  
@@ -552,7 +559,7 @@ export default function MatchDetailsScreen() {
     if (!url) return;  
     const supported = await Linking.canOpenURL(url);  
     if (!supported) {  
-      Alert.alert(language === "en" ? "Map" : "Kart", language === "en" ? "Could not open maps on this device." : "Kunne ikke åpne kart på denne enheten.");  
+      Alert.alert(tr(language, "matchDetail.map"), tr(language, "matchDetail.could.not.open.maps.on.this.device"));  
       return;  
     }  
     await Linking.openURL(url);  
@@ -568,14 +575,14 @@ export default function MatchDetailsScreen() {
     return (  
       <View style={styles.center}>  
         <ActivityIndicator />  
-        <Text style={{ marginTop: 8 }}>{language === "en" ? "Loading…" : "Laster…"}</Text>  
+        <Text style={{ marginTop: 8 }}>{tr(language, "matchDetail.loading")}</Text>  
       </View>  
     );  
   }  
   if (!match) {  
     return (  
       <View style={styles.center}>  
-        <Text>{language === "en" ? "Missing match" : "Mangler match"}</Text>  
+        <Text>{tr(language, "matchDetail.missing.match")}</Text>  
       </View>  
     );  
   }    
@@ -598,8 +605,8 @@ const areaSummary = areaSummaryForMatch(match, language);
   // Din rapport/motpart basert på user_id  
   const youOwnLost = match.lost?.user_id === user?.id;  
   const youOwnFound = match.found?.user_id === user?.id;  
-  const labelLostOwner = youOwnLost ? (language === "en" ? "Your case" : "Din sak") : (language === "en" ? "Other party" : "Motpart");  
-  const labelFoundOwner = youOwnFound ? (language === "en" ? "Your case" : "Din sak") : (language === "en" ? "Other party" : "Motpart");  
+  const labelLostOwner = youOwnLost ? (tr(language, "matchDetail.your.case")) : (tr(language, "matchDetail.other.party"));  
+  const labelFoundOwner = youOwnFound ? (tr(language, "matchDetail.your.case")) : (tr(language, "matchDetail.other.party"));  
   const ReportBlock = ({ rep, ownerLabel }: { rep: ReportFull; ownerLabel: string }) => {  
     const urls = thumbs[rep.id] || [];  
     const cat = categoryLabel(rep.category, language);  
@@ -619,24 +626,24 @@ const areaSummary = areaSummaryForMatch(match, language);
         <Text style={styles.repTitle}>{prettyHeading(rep, language)}</Text>  
         {!!rep.description && rep.type === "LOST" && (  
           <View style={styles.finderMessageBox}>  
-            <Text style={styles.finderMessageLabel}>{language === "en" ? "Message to finder" : "Beskjed til finner"}</Text>  
+            <Text style={styles.finderMessageLabel}>{tr(language, "matchDetail.message.to.finder")}</Text>  
             <Text style={styles.finderMessageText}>{rep.description}</Text>  
           </View>  
         )}  
         <View style={styles.metaRow}>  
           {!!cat && <Text style={styles.badge}>{cat}</Text>}  
           {!!sub && <Text style={styles.badge}>{sub}</Text>}  
-          {!!col && <Text style={styles.badge}>{language === "en" ? "Color" : "Farge"}: {col}</Text>}  
-          {!!brand && <Text style={styles.badge}>{language === "en" ? "Brand" : "Merke"}: {brand}</Text>}  
-          {!!place && <Text style={styles.badge}>{language === "en" ? "Place" : "Sted"}: {place}</Text>}  
+          {!!col && <Text style={styles.badge}>{tr(language, "matchDetail.color")}: {col}</Text>}  
+          {!!brand && <Text style={styles.badge}>{tr(language, "matchDetail.brand")}: {brand}</Text>}  
+          {!!place && <Text style={styles.badge}>{tr(language, "matchDetail.place")}: {place}</Text>}  
         </View>  
         {canOpenMap && (  
           <View style={styles.locationHelpBox}>  
             <Text style={styles.locationHelpText}>  
-              {language === "en" ? "You can open the exact find location in maps." : "Du kan åpne nøyaktig funnsted i kart."}  
+              {tr(language, "matchDetail.you.can.open.the.exact.find.location.in.maps")}  
             </Text>  
             <Pressable style={styles.mapLinkBtn} onPress={() => openInMaps(rep)}>  
-              <Text style={styles.mapLinkTxt}>{language === "en" ? "Open in maps" : "Åpne i kart"}</Text>  
+              <Text style={styles.mapLinkTxt}>{tr(language, "matchDetail.open.in.maps")}</Text>  
             </Pressable>  
           </View>  
         )}  
@@ -650,10 +657,10 @@ const areaSummary = areaSummaryForMatch(match, language);
             ))}  
           </View>  
         ) : (  
-          <Text style={styles.muted}>{language === "en" ? "No images" : "Ingen bilder"}</Text>  
+          <Text style={styles.muted}>{tr(language, "matchDetail.no.images")}</Text>  
         )}  
         {typeof rep.reward_ore === "number" && rep.reward_ore > 0 && (  
-          <Text style={styles.reward}>{language === "en" ? "Reward" : "Finnerlønn"}: {(rep.reward_ore / 100).toFixed(2)} kr</Text>  
+          <Text style={styles.reward}>{tr(language, "matchDetail.reward")}: {(rep.reward_ore / 100).toFixed(2)} kr</Text>  
         )}  
       </View>  
     );  
@@ -671,8 +678,8 @@ const areaSummary = areaSummaryForMatch(match, language);
       />  
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 24 }}>  
       <PremiumHeader  
-        title={language === "en" ? "Match" : "Treff"}  
-        subtitle={language === "en" ? "Details and photos" : "Detaljer og bilder"}  
+        title={tr(language, "matchDetail.match")}  
+        subtitle={tr(language, "matchDetail.details.and.photos")}  
         onBack={() => router.back()}  
         right={<AuthHeaderAction />}  
       />  
@@ -684,17 +691,17 @@ const areaSummary = areaSummaryForMatch(match, language);
             {unread && <Text style={styles.unreadDot}>●</Text>}  
           </View>  
           <Text style={styles.headerBlurb}>{objectCompare.same
-            ? (language === "en" ? "The reported item type is the same in both cases." : "Gjenstandstypen er lik i begge rapportene.")
-            : (language === "en" ? "The item descriptions differ, but the items are related and other details support the match." : "Gjenstandsbeskrivelsene er ulike, men gjenstandene er beslektet og andre opplysninger støtter treffet.")}</Text>
+            ? (tr(language, "matchDetail.the.reported.item.type.is.the.same.in.both.cases"))
+            : (tr(language, "matchDetail.the.item.descriptions.differ.but.the.items.are.r"))}</Text>
           {!!objectCompare.value && <View style={styles.compareBox}>
-            <Text style={styles.compareLabel}>{language === "en" ? "Item comparison" : "Sammenligning av gjenstand"}</Text>
+            <Text style={styles.compareLabel}>{tr(language, "matchDetail.item.comparison")}</Text>
             <Text style={styles.compareValue}>{objectCompare.value}</Text>
             {!!objectCompare.note && <Text style={styles.compareNote}>{objectCompare.note}</Text>}
           </View>}  
           <View style={styles.metaRow}>  
-            {!!areaSummary && <Text style={styles.badge}>{language === "en" ? "Location" : "Sted"}: {areaSummary}</Text>}  
-            {!!counterpartSeen && <Text style={styles.badge}>{language === "en" ? "Last seen" : "Sist sett"}: {counterpartSeen}</Text>}  
-            {!!reportUpdatedAgo && <Text style={styles.badge}>{language === "en" ? "Case updated" : "Sak oppdatert"}: {reportUpdatedAgo}</Text>}  
+            {!!areaSummary && <Text style={styles.badge}>{tr(language, "matchDetail.location")}: {areaSummary}</Text>}  
+            {!!counterpartSeen && <Text style={styles.badge}>{tr(language, "matchDetail.last.seen")}: {counterpartSeen}</Text>}  
+            {!!reportUpdatedAgo && <Text style={styles.badge}>{tr(language, "matchDetail.case.updated")}: {reportUpdatedAgo}</Text>}  
           </View>  
           <Text style={styles.lastLine}>{lastLine}</Text>  
       {hiddenLow && (  
@@ -703,7 +710,7 @@ const areaSummary = areaSummaryForMatch(match, language);
         </View>          
       {/* VS-bilde: vis toppbilde fra begge rapporter når tilgjengelig */}  
       <View style={styles.vsCard}>  
-        <Text style={styles.vsTitle}>{language === "en" ? "Images (your case vs other party)" : "Bilder (din sak og motpartens)"}</Text>  
+        <Text style={styles.vsTitle}>{tr(language, "matchDetail.images.your.case.vs.other.party")}</Text>  
         <View style={styles.vsRow}>  
           <Pressable  
             style={[styles.vsCol, styles.vsColLeft]}  
@@ -719,7 +726,7 @@ const areaSummary = areaSummaryForMatch(match, language);
               setViewerVisible(true);  
             }}  
           >  
-            <Text style={styles.vsLabel}>{language === "en" ? "Yours" : "Din side"}</Text>  
+            <Text style={styles.vsLabel}>{tr(language, "matchDetail.yours")}</Text>  
             {(thumbs[(youOwnLost ? match.lost.id : (youOwnFound ? match.found.id : match.lost.id))] ?? [])[0] ? (  
               <Image  
                 source={{ uri: (thumbs[(youOwnLost ? match.lost.id : (youOwnFound ? match.found.id : match.lost.id))] ?? [])[0] }}  
@@ -746,7 +753,7 @@ const areaSummary = areaSummaryForMatch(match, language);
               setViewerVisible(true);  
             }}  
           >  
-            <Text style={styles.vsLabel}>{language === "en" ? "Other party" : "Motpart"}</Text>  
+            <Text style={styles.vsLabel}>{tr(language, "matchDetail.other.party")}</Text>  
             {(thumbs[(youOwnLost ? match.found.id : (youOwnFound ? match.lost.id : match.found.id))] ?? [])[0] ? (  
               <Image  
                 source={{ uri: (thumbs[(youOwnLost ? match.found.id : (youOwnFound ? match.lost.id : match.found.id))] ?? [])[0] }}  
@@ -757,39 +764,39 @@ const areaSummary = areaSummaryForMatch(match, language);
             )}  
           </Pressable>  
         </View>  
-        <Text style={styles.vsHint}>{language === "en" ? "Tap an image to open all images in one viewer." : "Trykk på et bilde for å åpne alle bilder (samlet visning)."}</Text>  
+        <Text style={styles.vsHint}>{tr(language, "matchDetail.tap.an.image.to.open.all.images.in.one.viewer")}</Text>  
       </View>  
-<ReportBlock rep={match.lost} ownerLabel={`${labelLostOwner} (${language === "en" ? "Lost" : "Mistet"})`} />  
-        <ReportBlock rep={match.found} ownerLabel={`${labelFoundOwner} (${language === "en" ? "Found" : "Funnet"})`} />  
+<ReportBlock rep={match.lost} ownerLabel={`${labelLostOwner} (${tr(language, "matchDetail.lost")})`} />  
+        <ReportBlock rep={match.found} ownerLabel={`${labelFoundOwner} (${tr(language, "matchDetail.found")})`} />  
         <View style={styles.actions}>  
         {match.status === "CONFIRMED" ? (  
           <>  
             <Pressable style={[styles.btn, styles.btnOutline]} onPress={() => setStatus("DISMISSED")}>  
-              <Text style={styles.btnOutlineTxt}>{language === "en" ? "Dismiss" : "Avvis"}</Text>  
+              <Text style={styles.btnOutlineTxt}>{tr(language, "matchDetail.dismiss")}</Text>  
             </Pressable>  
             <Pressable style={[styles.btn, styles.btnPrimary]} onPress={openChat}>  
-              <Text style={styles.btnPrimaryTxt}>{unread ? (language === "en" ? "Open chat (new message)" : "Åpne chat (ny melding)") : (language === "en" ? "Open chat" : "Åpne chat")}</Text>  
+              <Text style={styles.btnPrimaryTxt}>{unread ? (tr(language, "matchDetail.open.chat.new.message")) : (tr(language, "matchDetail.open.chat"))}</Text>  
             </Pressable>  
           </>  
         ) : youOwnLost ? (  
           <>  
             <Pressable style={[styles.btn, styles.btnOutline]} onPress={() => setStatus("DISMISSED")}>  
-              <Text style={styles.btnOutlineTxt}>{language === "en" ? "Dismiss" : "Avvis"}</Text>  
+              <Text style={styles.btnOutlineTxt}>{tr(language, "matchDetail.dismiss")}</Text>  
             </Pressable>  
             <Pressable style={[styles.btn, styles.btnPrimary]} onPress={() => setStatus("CONFIRMED")}>  
-              <Text style={styles.btnPrimaryTxt}>{language === "en" ? "Confirm match" : "Bekreft treff"}</Text>  
+              <Text style={styles.btnPrimaryTxt}>{tr(language, "matchDetail.confirm.match")}</Text>  
             </Pressable>  
           </>  
         ) : (  
           <View style={styles.pendingCard}>  
-            <Text style={styles.pendingTitle}>{language === "en" ? "Waiting for approval from the owner" : "Venter på bekreftelse fra eieren"}</Text>  
-            <Text style={styles.pendingText}>{language === "en" ? "Chat opens only when the owner has confirmed the match." : "Chat åpnes først når eieren har bekreftet treffet."}</Text>  
+            <Text style={styles.pendingTitle}>{tr(language, "matchDetail.waiting.for.approval.from.the.owner")}</Text>  
+            <Text style={styles.pendingText}>{tr(language, "matchDetail.chat.opens.only.when.the.owner.has.confirmed.the")}</Text>  
           </View>  
         )}  
       </View>  
       {match.status !== "CONFIRMED" && !youOwnLost && (  
         <Text style={styles.infoNote}>  
-          {language === "en" ? "You can view details now. Chat opens automatically when the owner confirms the match." : "Du kan se detaljer nå. Chat åpnes automatisk når eieren bekrefter treffet."}  
+          {tr(language, "matchDetail.you.can.view.details.now.chat.opens.automaticall")}  
         </Text>  
       )}  
     </ScrollView>  

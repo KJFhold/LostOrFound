@@ -5,8 +5,16 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { PremiumHeader } from "../src/ui/PremiumHeader";
 import { theme } from "../src/ui/theme";
 import { useI18n } from "../src/i18n/I18nProvider";
+
+import { en } from "../src/i18n/locales/en";
+import { no } from "../src/i18n/locales/no";
+import type { TranslationKey } from "../src/i18n/locales/en";
 import { previewGeoAlert, type GeoAlertPreviewResult } from "../src/lib/geoAlertPreview";
 import { activateTestReportOrder, createReportOrder } from "../src/lib/reportCommerce";
+
+function tr(language: "no" | "en", key: TranslationKey): string {
+  return language === "en" ? en[key] : no[key];
+}
 
 const RADII = [250, 500, 1000, 1500, 3000, 5000, 10000];
 const DURATION_HOURS = 168;
@@ -37,8 +45,8 @@ export default function GeoAlertCreateScreen() {
 
   useEffect(() => {
     if (!validLocation) Alert.alert(
-      language === "en" ? "Location missing" : "Sted mangler",
-      language === "en" ? "The report needs a valid location before a geo alert can be previewed." : "Rapporten må ha et gyldig sted før geovarselet kan forhåndsvises."
+      tr(language, "areaAlertCreate.location.missing"),
+      tr(language, "areaAlertCreate.the.report.needs.a.valid.location.before.a.geo.a")
     );
   }, [validLocation, language]);
 
@@ -67,7 +75,7 @@ export default function GeoAlertCreateScreen() {
       setResult(next);
       requestIdRef.current = createClientRequestId(reportId);
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Could not calculate" : "Kunne ikke beregne", e?.message || String(e));
+      Alert.alert(tr(language, "areaAlertCreate.could.not.calculate"), e?.message || String(e));
     } finally {
       setBusy(false);
     }
@@ -102,20 +110,20 @@ export default function GeoAlertCreateScreen() {
         skipped: Number(activated.areaAlertDispatch?.skippedAsDuplicate || 0),
       });
     } catch (e: any) {
-      Alert.alert(language === "en" ? "Could not create area alert" : "Kunne ikke opprette områdevarsel", e?.message || String(e));
+      Alert.alert(tr(language, "areaAlertCreate.could.not.create.area.alert"), e?.message || String(e));
     } finally {
       setActivating(false);
     }
   };
 
   if (!validLocation) {
-    return <View style={styles.safe}><PremiumHeader title={language === "en" ? "Area alert" : "Områdevarsel"} onBack={() => router.back()} /><View style={styles.center}><Text style={styles.muted}>{language === "en" ? "The report has no usable coordinates." : "Rapporten har ingen brukbare koordinater."}</Text></View></View>;
+    return <View style={styles.safe}><PremiumHeader title={tr(language, "areaAlertCreate.area.alert")} onBack={() => router.back()} /><View style={styles.center}><Text style={styles.muted}>{tr(language, "areaAlertCreate.the.report.has.no.usable.coordinates")}</Text></View></View>;
   }
 
   return <>
     <Stack.Screen options={{ headerShown: false }} />
     <View style={styles.safe}>
-      <PremiumHeader title={language === "en" ? "Notify people nearby" : "Varsle i området"} subtitle={String(params.title || "")} onBack={() => router.back()} />
+      <PremiumHeader title={tr(language, "areaAlertCreate.notify.people.nearby")} subtitle={String(params.title || "")} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.mapFrame}>
           <MapView ref={mapRef} provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined} style={styles.map} initialRegion={region} scrollEnabled zoomEnabled>
@@ -125,37 +133,37 @@ export default function GeoAlertCreateScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.h2}>{language === "en" ? "Coverage" : "Dekningsområde"}</Text>
+          <Text style={styles.h2}>{tr(language, "areaAlertCreate.coverage")}</Text>
           <View style={styles.chips}>{RADII.map(v => <Chip key={v} active={radiusM === v} label={v >= 1000 ? `${v / 1000} km` : `${v} m`} onPress={() => setRadiusM(v)} />)}</View>
-          <Text style={styles.help}>{language === "en" ? "The blue circle is centered on the report location." : "Den blå sirkelen er sentrert på rapportens sted."}</Text>
+          <Text style={styles.help}>{tr(language, "areaAlertCreate.the.blue.circle.is.centered.on.the.report.locati")}</Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.h2}>{language === "en" ? "Campaign" : "Kampanje"}</Text>
-          <Text style={styles.ruleTitle}>{language === "en" ? "One notification · Active for 7 days" : "Ett varsel · Aktiv i 7 dager"}</Text>
-          <Text style={styles.help}>{language === "en" ? "The notification is sent once. Recipients can find the alert again in the app while the campaign is active." : "Varslet sendes én gang. Mottakerne kan finne etterlysningen igjen i appen mens kampanjen er aktiv."}</Text>
+          <Text style={styles.h2}>{tr(language, "areaAlertCreate.campaign")}</Text>
+          <Text style={styles.ruleTitle}>{tr(language, "areaAlertCreate.one.notification.active.for.7.days")}</Text>
+          <Text style={styles.help}>{tr(language, "areaAlertCreate.the.notification.is.sent.once.recipients.can.fin")}</Text>
         </View>
 
         <Pressable disabled={busy || activating} style={[styles.primary, (busy || activating) && styles.disabled]} onPress={calculate}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{language === "en" ? "Calculate reach and price" : "Beregn rekkevidde og pris"}</Text>}
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{tr(language, "areaAlertCreate.calculate.reach.and.price")}</Text>}
         </Pressable>
 
         {result && <View style={styles.result}>
-          <Text style={styles.resultEyebrow}>{language === "en" ? "CURRENT ESTIMATE" : "AKTUELT ESTIMAT"}</Text>
-          <Text style={styles.resultTitle}>{result.preview.eligibleUsers} {language === "en" ? "qualified users" : "kvalifiserte brukere"}</Text>
-          <Text style={styles.resultMeta}>{result.preview.eligibleInstallations} {language === "en" ? "active installations" : "aktive installasjoner"} · {result.preview.areaSqKm.toFixed(2)} km²</Text>
-          <View style={styles.priceRow}><Text style={styles.priceLabel}>{language === "en" ? "Test price" : "Testpris"}</Text><Text style={styles.price}>{(result.quote.amountOre / 100).toLocaleString(language === "en" ? "en-GB" : "nb-NO")} kr</Text></View>
-          <Text style={styles.warning}>{language === "en" ? "Test mode: no real payment is made. Activation creates a test order and campaign." : "Testmodus: Ingen ekte betaling gjennomføres. Aktivering oppretter en testordre og kampanje."}</Text>
+          <Text style={styles.resultEyebrow}>{tr(language, "areaAlertCreate.current.estimate")}</Text>
+          <Text style={styles.resultTitle}>{result.preview.eligibleUsers} {tr(language, "areaAlertCreate.qualified.users")}</Text>
+          <Text style={styles.resultMeta}>{result.preview.eligibleInstallations} {tr(language, "areaAlertCreate.active.installations")} · {result.preview.areaSqKm.toFixed(2)} km²</Text>
+          <View style={styles.priceRow}><Text style={styles.priceLabel}>{tr(language, "areaAlertCreate.test.price")}</Text><Text style={styles.price}>{(result.quote.amountOre / 100).toLocaleString(tr(language, "areaAlertCreate.en.gb"))} kr</Text></View>
+          <Text style={styles.warning}>{tr(language, "areaAlertCreate.test.mode.no.real.payment.is.made.activation.cre")}</Text>
           {!activatedUntil ? (
             <Pressable disabled={activating} style={[styles.activate, activating && styles.disabled]} onPress={createAndActivate}>
-              {activating ? <ActivityIndicator color="#fff" /> : <Text style={styles.activateText}>{language === "en" ? "Activate test area alert" : "Aktiver test-områdevarsel"}</Text>}
+              {activating ? <ActivityIndicator color="#fff" /> : <Text style={styles.activateText}>{tr(language, "areaAlertCreate.activate.test.area.alert")}</Text>}
             </Pressable>
           ) : (
             <View style={styles.successBox}>
-              <Text style={styles.successTitle}>{language === "en" ? "Area alert active" : "Områdevarsel aktivt"}</Text>
-              <Text style={styles.successText}>{language === "en" ? "Active until" : "Aktiv til"}: {new Date(activatedUntil).toLocaleString(language === "en" ? "en-GB" : "nb-NO")}</Text>
+              <Text style={styles.successTitle}>{tr(language, "areaAlertCreate.area.alert.active")}</Text>
+              <Text style={styles.successText}>{tr(language, "areaAlertCreate.active.until")}: {new Date(activatedUntil).toLocaleString(tr(language, "areaAlertCreate.en.gb"))}</Text>
               {dispatchSummary && <Text style={styles.successText}>{language === "en" ? `${dispatchSummary.sent} notification(s) sent` : `${dispatchSummary.sent} varsel sendt`}{dispatchSummary.skipped ? ` · ${dispatchSummary.skipped} duplikat hoppet over` : ""}</Text>}
-              <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>{language === "en" ? "Back to report" : "Tilbake til rapporten"}</Text></Pressable>
+              <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>{tr(language, "areaAlertCreate.back.to.report")}</Text></Pressable>
             </View>
           )}
         </View>}

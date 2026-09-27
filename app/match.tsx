@@ -1,6 +1,6 @@
 ﻿// app/match.tsx    
-// Match-liste: premium header + chat-status (siste melding + hvem) + unread-indikator.    
-// Valg: 1A ("Din rapport" er reportId du kom inn med) og 2A (Åpne chat kun når CONFIRMED).    
+// Match list: premium header, latest-message status, sender, and unread indicator.    
+// Behavior: reportId identifies the current case; chat opens only when status is CONFIRMED.    
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";    
 import {    
   View,    
@@ -23,6 +23,14 @@ import { theme } from "../src/ui/theme";
 import { PremiumHeader } from "../src/ui/PremiumHeader";    
 import { AuthHeaderAction } from "../src/ui/AuthHeaderAction";    
 import { useI18n } from "../src/i18n/I18nProvider";    
+
+import { en } from "../src/i18n/locales/en";
+import { no } from "../src/i18n/locales/no";
+import type { TranslationKey } from "../src/i18n/locales/en";
+function tr(language: "no" | "en", key: TranslationKey): string {
+  return language === "en" ? en[key] : no[key];
+}
+
 type Reason = { k: string; v: any };    
 type ReportLite = {    
   id: string;    
@@ -195,7 +203,7 @@ function scoreLabel(score: number, language: AppLang = "no") {
   return "Lavt samsvar";
 }    
 function scoreLevel(score: number) {    
-  // 1 = lav (skjules), 2 = mulig, 3 = sannsynlig, 4 = svært sannsynlig    
+  // 1 = low (hidden), 2 = possible, 3 = likely, 4 = very likely    
   if (score >= 85) return 4;    
   if (score >= 70) return 3;    
   if (score >= 55) return 2;    
@@ -204,13 +212,13 @@ function scoreLevel(score: number) {
 function bannerTone(level: number) {    
   switch (level) {    
     case 4:    
-      return { bg: "#166534", fg: "#fff" }; // mørk grønn    
+      return { bg: "#166534", fg: "#fff" }; // dark green    
     case 3:    
-      return { bg: "#15803D", fg: "#fff" }; // grønn    
+      return { bg: "#15803D", fg: "#fff" }; // green    
     case 2:    
       return { bg: "#F59E0B", fg: "#111" }; // amber    
     default:    
-      return { bg: "#64748B", fg: "#fff" }; // slate (skal normalt ikke vises)    
+      return { bg: "#64748B", fg: "#fff" }; // slate (normally hidden)    
   }    
 }    
 function reportCore(rep: any, language: AppLang = "no") {
@@ -227,7 +235,7 @@ function timeAgoShort(iso?: string | null, language: AppLang = "no") {
   const ms = Date.now() - d.getTime();
   if (!Number.isFinite(ms)) return null;
   const min = Math.floor(ms / 60000);
-  if (min < 1) return language === "en" ? "now" : "nå";
+  if (min < 1) return tr(language, "match.now");
   if (min < 60) return String(min) + " min";
   const h = Math.floor(min / 60);
   if (h < 24) return String(h) + " h";
@@ -244,8 +252,8 @@ function pickReasons(m: Match, language: AppLang = "no") {
   if (lostLabel) lines.push({ icon: "✓", text: lostLabel });
   if (foundLabel) lines.push({ icon: "✓", text: foundLabel });
   if (dist) lines.push({ icon: "✓", text: language === "en" ? dist + " away" : dist + " unna" });
-  if (days) lines.push({ icon: "✓", text: (language === "en" ? "Time: " : "Tid: ") + days });
-  if (lines.length < 4 && txt) lines.push({ icon: "✓", text: (language === "en" ? "Text: " : "Tekst: ") + txt });
+  if (days) lines.push({ icon: "✓", text: (tr(language, "match.time")) + days });
+  if (lines.length < 4 && txt) lines.push({ icon: "✓", text: (tr(language, "match.text")) + txt });
   return lines.slice(0, 4);
 }    
 function statusLabel(s: any, language: AppLang = "no") {
@@ -262,7 +270,7 @@ function formatDistance(meters: any) {
 function formatDays(days: any, language: AppLang = "no") {
   const n = Number(days);
   if (!Number.isFinite(n)) return null;
-  if (n < 1) return language === "en" ? "today" : "i dag";
+  if (n < 1) return tr(language, "match.today");
   return n.toFixed(1) + " d";
 }    
 function formatTextSim(sim: any) {    
@@ -348,8 +356,8 @@ function objectComparison(m: Match, language: AppLang = "no") {
   const same = !!lost && !!found && normalizeText(lost) === normalizeText(found);
   const value = lost && found ? (same ? lost : `${lost} ↔ ${found}`) : (lost || found || "");
   const note = same || !lost || !found ? null : level >= 2
-    ? (language === "en" ? "Related items" : "Beslektede gjenstander")
-    : (language === "en" ? "Possibly related items" : "Mulig beslektede gjenstander");
+    ? (tr(language, "match.related.items"))
+    : (tr(language, "match.possibly.related.items"));
   return { lost, found, level, same, value, note };
 }
 
@@ -364,7 +372,7 @@ function headlineTitle(m: Match, language: AppLang = "no") {
     const merged = parts.join(" ").trim();
     return merged.charAt(0).toUpperCase() + merged.slice(1);
   }
-  return reportCore(m.lost, language) || reportCore(m.found, language) || (language === "en" ? "Unknown item" : "Ukjent gjenstand");
+  return reportCore(m.lost, language) || reportCore(m.found, language) || (tr(language, "match.unknown.item"));
 }    
 function objectTone(m: Match, language: AppLang = "no"): SimilarityTone {
   const comparison = objectComparison(m, language);
@@ -420,11 +428,11 @@ function detailRowsForMatch(m: Match, reportId?: string, language: AppLang = "no
   const color = primaryColor(m, language);
   const seenAgo = timeAgoLong(counterpart?.occurred_at || counterpart?.created_at || null, language);
   const updatedAgo = timeAgoLong(latestReportIso(m), language);
-  if (object.value) rows.push({ label: language === "en" ? "Item" : "Gjenstand", value: object.value, tone: objectTone(m, language), note: object.note });
-  if (color) rows.push({ label: language === "en" ? "Color" : "Farge", value: String(color), tone: colorTone(m, language) });
+  if (object.value) rows.push({ label: tr(language, "match.item"), value: object.value, tone: objectTone(m, language), note: object.note });
+  if (color) rows.push({ label: tr(language, "match.color"), value: String(color), tone: colorTone(m, language) });
   rows.push(areaInfo);
-  if (seenAgo) rows.push({ label: language === "en" ? "Last seen" : "Sist sett", value: seenAgo, tone: daysTone(daysApart) });
-  if (updatedAgo) rows.push({ label: language === "en" ? "Case updated" : "Sak oppdatert", value: updatedAgo, tone: "neutral" });
+  if (seenAgo) rows.push({ label: tr(language, "match.last.seen"), value: seenAgo, tone: daysTone(daysApart) });
+  if (updatedAgo) rows.push({ label: tr(language, "match.case.updated"), value: updatedAgo, tone: "neutral" });
   return rows;
 }    
 function reportRadiusMeters(rep?: ReportLite | null) {    
@@ -445,9 +453,9 @@ function reportRadiusMeters(rep?: ReportLite | null) {
   return null;    
 }    
 function areaRelationForMatch(m: Match, language: AppLang = "no"): SimilarityRow {
-  const label = language === "en" ? "Location" : "Sted";
-  const insideText = language === "en" ? "Within selected area" : "Innenfor markert område";
-  const missingText = language === "en" ? "Location information missing" : "Stedsinformasjon mangler";
+  const label = tr(language, "match.location");
+  const insideText = tr(language, "match.within.selected.area");
+  const missingText = tr(language, "match.location.information.missing");
   const outsideText = (value: string | null) => language === "en" ? String(value) + " outside selected area" : String(value) + " utenfor valgt område";
   const distRaw = reasonVal(m.reasons, "distance_m");
   const dist = Number(distRaw);
@@ -472,7 +480,7 @@ function areaRelationForMatch(m: Match, language: AppLang = "no"): SimilarityRow
 }    
 function prettyShort(rep: ReportLite, forcedType?: "LOST" | "FOUND", language: AppLang = "no") {
   const typ = forcedType ?? rep.type ?? "LOST";
-  const typLabel = typ === "LOST" ? (language === "en" ? "Lost" : "Mistet") : (language === "en" ? "Found" : "Funnet");
+  const typLabel = typ === "LOST" ? (tr(language, "match.lost")) : (tr(language, "match.found"));
   const sub = subcategoryLabel(rep.category, rep.subcategory_key, language);
   const col = colorLabel(rep.color, language);
   const brand = titleCase(rep.brand);
@@ -556,10 +564,8 @@ export default function MatchScreen() {
         const serverMsg = String(data?.error ?? "Kunne ikke hente treff");    
         if (r.status === 404 && /report not found/i.test(serverMsg)) {    
           Alert.alert(    
-            language === "en" ? "Case not found" : "Sak ikke funnet",    
-            language === "en"    
-              ? "This case no longer exists or you do not have access to it."    
-              : "Denne saken finnes ikke lenger eller du har ikke tilgang til den.",    
+            tr(language, "match.case.not.found"),    
+            tr(language, "match.this.case.no.longer.exists.or.you.do.not.have.ac"),    
             [{ text: "OK", onPress: () => router.back() }]    
           );    
           setMatches([]);    
@@ -671,7 +677,7 @@ export default function MatchScreen() {
         }    
       }    
     } catch (e: any) {    
-      Alert.alert(language === "en" ? "Error" : "Feil", e?.message ?? (language === "en" ? "Unknown error" : "Ukjent feil"));    
+      Alert.alert(tr(language, "match.error"), e?.message ?? (tr(language, "match.unknown.error")));    
     } finally {    
       setLoading(false);    
     }    
@@ -748,7 +754,7 @@ export default function MatchScreen() {
   if (!reportId) {    
     return (    
       <View style={styles.center}>    
-        <Text>{language === "en" ? "Missing reportId." : "Mangler reportId."}</Text>    
+        <Text>{tr(language, "match.missing.reportid")}</Text>    
       </View>    
     );    
   }    
@@ -760,15 +766,15 @@ export default function MatchScreen() {
       <Stack.Screen options={{ headerShown: false }} />    
       <View style={styles.safe}>    
         <PremiumHeader    
-          title={language === "en" ? "Matches" : "Treff"}    
-          subtitle={language === "en" ? "Possible matches for your case" : "Mulige treff for saken din"}    
+          title={tr(language, "match.matches")}    
+          subtitle={tr(language, "match.possible.matches.for.your.case")}    
           onBack={() => router.back()}    
           right={<AuthHeaderAction />}    
         />    
         {loading ? (    
           <View style={styles.center}>    
             <ActivityIndicator />    
-            <Text style={{ marginTop: 8 }}>{language === "en" ? "Loading matches…" : "Laster treff…"}</Text>    
+            <Text style={{ marginTop: 8 }}>{tr(language, "match.loading.matches")}</Text>    
           </View>    
         ) : (    
           <FlatList    
@@ -782,8 +788,8 @@ export default function MatchScreen() {
             const tone = bannerTone(level);    
             const unread = unreadByMatch[item.id] === true;    
             const ownIsLost = item.lost?.id === reportId;    
-            const ownLabel = ownIsLost ? (language === "en" ? "Your case" : "Din sak") : (language === "en" ? "Other party" : "Motpart");    
-            const otherLabel = ownIsLost ? (language === "en" ? "Other party" : "Motpart") : (language === "en" ? "Your case" : "Din sak");    
+            const ownLabel = ownIsLost ? (tr(language, "match.your.case")) : (tr(language, "match.other.party"));    
+            const otherLabel = ownIsLost ? (tr(language, "match.other.party")) : (tr(language, "match.your.case"));    
             const ownImgUri = ownIsLost ? thumbMap[item.id]?.own : thumbMap[item.id]?.other;    
             const otherImgUri = ownIsLost ? thumbMap[item.id]?.other : thumbMap[item.id]?.own;    
             const title = headlineTitle(item, language);    
@@ -819,7 +825,7 @@ export default function MatchScreen() {
                 </View>    
                 <View style={styles.divider} />    
                 <Text style={styles.summaryHeading}>{title}</Text>    
-                <Text style={styles.sectionLabel}>{language === "en" ? "Key details" : "Samsvar"}</Text>    
+                <Text style={styles.sectionLabel}>{tr(language, "match.key.details")}</Text>    
                 <View style={styles.reasonList}>    
                   {detailRows.map((row, idx) => {    
                     const accent = similarityAccent(row.tone);    
@@ -838,19 +844,19 @@ ${row.note}`}</Text>}
                 </View>    
                 <View style={styles.actionsRow}>    
                   <Pressable style={[styles.actionBtn, styles.actionBtnGhost]} onPress={() => router.push(`/matches/${item.id}`)}>    
-                    <Text style={styles.actionTxtGhost}>{language === "en" ? "View details" : "Se detaljer"}</Text>    
+                    <Text style={styles.actionTxtGhost}>{tr(language, "match.view.details")}</Text>    
                   </Pressable>    
                   {item.status === "CONFIRMED" ? (    
                     <Pressable style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push(`/chat/${item.id}`)}>    
-                      <Text style={styles.actionTxtPrimary}>{language === "en" ? "Open chat" : "Åpne chat"}</Text>    
+                      <Text style={styles.actionTxtPrimary}>{tr(language, "match.open.chat")}</Text>    
                     </Pressable>    
                   ) : ownIsLost ? (    
                     <Pressable style={[styles.actionBtn, styles.actionBtnMuted]} onPress={() => router.push(`/matches/${item.id}`)}>    
-                      <Text style={styles.actionTxtMuted}>{language === "en" ? "Confirm in details" : "Bekreft treff i detalj"}</Text>    
+                      <Text style={styles.actionTxtMuted}>{tr(language, "match.confirm.in.details")}</Text>    
                     </Pressable>    
                   ) : (    
                     <View style={[styles.actionBtn, styles.actionBtnMuted]}>    
-                      <Text style={styles.actionTxtMuted}>{language === "en" ? "Waiting for approval" : "Venter på bekreftelse"}</Text>    
+                      <Text style={styles.actionTxtMuted}>{tr(language, "match.waiting.for.approval")}</Text>    
                     </View>    
                   )}    
                 </View>    
@@ -859,7 +865,7 @@ ${row.note}`}</Text>}
           }}    
           ListEmptyComponent={    
               <Text style={{ textAlign: "center", marginTop: 32 }}>    
-                {language === "en" ? "No matches yet (top 3 levels)." : "Ingen treff ennå (topp 3 nivåer)."}    
+                {tr(language, "match.no.matches.yet.top.3.levels")}    
               </Text>    
             }    
           />    

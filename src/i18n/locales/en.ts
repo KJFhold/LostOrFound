@@ -846,9 +846,6 @@ export const en = {
     "caseDetail.lost": "Lost",
     "caseDetail.found": "Found",
     "caseDetail.details.and.photos": "Details and photos",
-    "notifications.observation.message.title": "New observation message",
-    "notifications.observation.message.body": "You received a new message about an observation or possible find.",
-    "notifications.areaAlert.body": "{{item}} was reported lost near an area you follow.",
   } as const;
 
 export type TranslationKey = keyof typeof en;

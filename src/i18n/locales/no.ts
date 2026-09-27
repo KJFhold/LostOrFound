@@ -848,7 +848,4 @@ export const no: TranslationDictionary = {
     "caseDetail.lost": "Mistet",
     "caseDetail.found": "Funnet",
     "caseDetail.details.and.photos": "Detaljer og bilder",
-    "notifications.observation.message.title": "Ny melding om observasjon",
-    "notifications.observation.message.body": "Du har fått en ny melding om en observasjon eller et mulig funn.",
-    "notifications.areaAlert.body": "{{item}} er meldt mistet nær et område du følger.",
   };

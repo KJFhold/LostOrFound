@@ -16,7 +16,7 @@ export type ReportLocation = {
   latitude: number;
   longitude: number;
   address?: string;
-  /** Valgt radius i meter (valgfritt). */
+  /** Selected radius in meters, when applicable. */
   radiusMeters?: number;
   /** True only after the user has actively confirmed the map selection. */
   confirmed?: boolean;
@@ -58,14 +58,14 @@ const initialDraft: ReportDraft = {
 
 type Ctx = {
   draft: ReportDraft;
-  loading: boolean; // true mens vi rehydrerer fra disk
-  /** Sett et vilkårlig felt i utkastet. */
+  loading: boolean; // True while the draft is being restored from storage
+  /** Update a field in the draft. */
   setField: <K extends keyof ReportDraft>(key: K, value: ReportDraft[K]) => void;
-  /** Sett posisjonen (lat/lng[/radiusMeters]). */
+  /** Update the report location. */
   setLocation: (loc: ReportLocation | null) => void;
-  /** Nullstill hele utkastet. */
+  /** Reset the complete draft. */
   reset: () => Promise<void>;
-  /** Tving lagring til disk (kall før navigasjon til login). */
+  /** Persist immediately before navigation to authentication. */
   flush: () => Promise<void>;
 };
 

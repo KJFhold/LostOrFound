@@ -1,4 +1,4 @@
-// src/lib/payments.ts
+﻿// src/lib/payments.ts
 import { Platform } from 'react-native';
 
 const BASE_URL = Platform.select({
@@ -15,7 +15,7 @@ export async function createPaymentIntent(amountOre: number, currency = 'nok') {
   });
 
   if (!res.ok) {
-    // nyttig for feilsøking
+    // nyttig for feilsÃ¸king
     const text = await res.text().catch(() => '');
     throw new Error(`Backend error ${res.status}: ${text || res.statusText}`);
   }

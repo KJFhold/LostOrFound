@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { ScrollView, View, Text, TextInput, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
@@ -16,7 +16,6 @@ export default function ReportLost() {
       Alert.alert("Manglende tittel", "Hva mistet du?");
       return;
     }
-
     // TODO: Send til backend senere
     Alert.alert("Sendt", "Takk! Rapporten er lagret lokalt (MVP).");
     router.back();
@@ -56,6 +55,7 @@ export default function ReportLost() {
         />
 
         <View style={{ height: 16 }} />
+
         <Button
           label="Send rapport"
           onPress={submit}
@@ -89,3 +89,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 });
+``

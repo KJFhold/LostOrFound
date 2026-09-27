@@ -1,4 +1,4 @@
-// src/hooks/usePaymentSheet.ts
+﻿// src/hooks/usePaymentSheet.ts
 import { useCallback } from 'react';
 import {
   useStripe,
@@ -14,7 +14,7 @@ type StartPaymentOptions = {
 };
 
 export function usePaymentSheet() {
-  // Ikke destructure isGooglePaySupported – finnes ikke i alle versjoner
+  // Ikke destructure isGooglePaySupported â€“ finnes ikke i alle versjoner
   const stripe = useStripe();
 
   const startPayment = useCallback(
@@ -37,7 +37,7 @@ export function usePaymentSheet() {
         // applePay: { merchantCountryCode: 'NO' },
         // googlePay: { merchantCountryCode: 'NO', testEnv: true, currencyCode: 'NOK' },
 
-        // Valgfritt: forhåndsfylling av fakturainfo
+        // Valgfritt: forhÃ¥ndsfylling av fakturainfo
         defaultBillingDetails: { name: 'Kunde' },
 
         // Valgfritt: stil
@@ -50,7 +50,7 @@ export function usePaymentSheet() {
         throw new Error(`initPaymentSheet error: ${init.error.message}`);
       }
 
-      // (Valgfritt) Google Pay-støtte kan sjekkes slik, men er ikke nødvendig:
+      // (Valgfritt) Google Pay-stÃ¸tte kan sjekkes slik, men er ikke nÃ¸dvendig:
       // if (typeof (stripe as any).isGooglePaySupported === 'function') {
       //   try { await (stripe as any).isGooglePaySupported(); } catch {}
       // }
@@ -65,7 +65,7 @@ export function usePaymentSheet() {
       // Suksess!
       return true;
     },
-    [stripe] // én dep er nok siden vi kaller metoder på samme stripe-objekt
+    [stripe] // Ã©n dep er nok siden vi kaller metoder pÃ¥ samme stripe-objekt
   );
 
   return { startPayment };

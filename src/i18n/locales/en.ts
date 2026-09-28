@@ -887,6 +887,23 @@ export const en = {
     "alertAreas.activate": "Activate",
     "alertAreas.delete": "Delete",
     "alertAreas.categoryCount": "{{count}} categories",
+    "alertAreas.searchPlaceholder": "Search for an address or place",
+    "alertAreas.search": "Search",
+    "alertAreas.searchFailed": "Address search failed.",
+    "alertAreas.place": "Place",
+    "alertAreas.area": "Area",
+    "alertAreas.tapPlace": "Tap the map to place the center.",
+    "alertAreas.tapPolygon": "Tap at least three points to draw the area.",
+    "alertAreas.undo": "Undo",
+    "alertAreas.clear": "Clear",
+    "alertAreas.finishArea": "Finish area",
+    "alertAreas.morePointsTitle": "More points needed",
+    "alertAreas.morePointsBody": "Add at least three points before saving the area.",
+    "alertAreas.invalidArea": "The area is invalid. Clear the points and draw it again.",
+    "alertAreas.pointCount": "{{count}} points",
+    "alertAreas.circleType": "Place · {{radius}}",
+    "alertAreas.polygonType": "Area · {{count}} points",
+    "alertAreas.loginRequired": "Log in before managing notification areas.",
   } as const;
 
 export type TranslationKey = keyof typeof en;

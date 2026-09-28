@@ -110,30 +110,26 @@ await getPushPermissionState().catch(
           <Text style={styles.body}>{t("pushSettings.permissionIntro")}</Text>
           {loading ? <ActivityIndicator style={styles.loader} /> : <>
             <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>{t("pushSettings.systemPermission")}</Text>
-              <Text style={[styles.statusValue, permission === "granted" && styles.statusEnabled]}>{t(permissionKey as any)}</Text>
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>{t("pushSettings.appRegistration")}</Text>
-              <Text style={[styles.statusValue, installationActive && styles.statusEnabled]}>
-                {t(installationActive ? "pushSettings.registrationEnabled" : "pushSettings.registrationDisabled")}
+              <Text style={styles.statusLabel}>{t("pushSettings.deviceStatus")}</Text>
+              <Text style={[styles.statusValue, installationActive && permission === "granted" && styles.statusEnabled]}>
+                {t(installationActive && permission === "granted" ? "pushSettings.registrationEnabled" : "pushSettings.registrationDisabled")}
               </Text>
             </View>
-            {!installationActive && <Pressable disabled={busy} style={[styles.primary, busy && styles.disabled]} onPress={() => void enable()}>
-              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{permission === "denied" ? t("pushSettings.openSettings") : t("pushSettings.enableOnDevice")}</Text>}
-            </Pressable>}
-            {installationActive && <Pressable disabled={busy} style={[styles.secondary, busy && styles.disabled]} onPress={() => void test()}>
-              <Text style={styles.secondaryText}>{t("pushSettings.send.test.notification")}</Text>
-            </Pressable>}
-            {installationActive && <Pressable disabled={busy} style={styles.textButton} onPress={() => void disable()}>
-              <Text style={styles.textButtonText}>{t("pushSettings.disableFromApp")}</Text>
-            </Pressable>}
-            {permission === "granted" && !installationActive && <Pressable disabled={busy} style={styles.settingsButton} onPress={() => void openPushNotificationSettings()}>
-              <Text style={styles.settingsButtonText}>{t("pushSettings.openSettings")}</Text>
-            </Pressable>}
+            {permission === "denied" ? <Pressable disabled={busy} style={[styles.primary, busy && styles.disabled]} onPress={() => void openPushNotificationSettings()}>
+              <Text style={styles.primaryText}>{t("pushSettings.openSettings")}</Text>
+            </Pressable> : !installationActive ? <Pressable disabled={busy} style={[styles.primary, busy && styles.disabled]} onPress={() => void enable()}>
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("pushSettings.enableOnDevice")}</Text>}
+            </Pressable> : <>
+              <Pressable disabled={busy} style={[styles.secondary, busy && styles.disabled]} onPress={() => void test()}>
+                <Text style={styles.secondaryText}>{t("pushSettings.send.test.notification")}</Text>
+              </Pressable>
+              <Pressable disabled={busy} style={styles.textButton} onPress={() => void disable()}>
+                <Text style={styles.textButtonText}>{t("pushSettings.disableFromApp")}</Text>
+              </Pressable>
+            </>}
           </>}
         </View>
-        <Text style={styles.note}>{t("pushSettings.permissionAndRegistrationNote")}</Text>
+        <Text style={styles.note}>{t("pushSettings.simplePermissionNote")}</Text>
       </View>
     </View>
   </>;

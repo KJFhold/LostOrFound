@@ -35,8 +35,13 @@ export default function ProfileTab() {
       onPress: () => router.push("/notifications"),
     },
     {
+      icon: "map-outline" as const,
+      title: t("profile.alertAreas"),
+      onPress: () => router.push("/alert-areas"),
+    },
+    {
       icon: "settings-outline" as const,
-      title: t("profile.notificationSettings"),
+      title: t("profile.pushNotifications"),
       onPress: () => router.push("/push-settings"),
     },
     {

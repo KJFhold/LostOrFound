@@ -49,6 +49,28 @@ export async function openPushNotificationSettings() {
   await Linking.openSettings();
 }
 
+export type PushInstallationState = {
+  installationId: string;
+  active: boolean;
+  permissionStatus: string | null;
+};
+
+export async function getCurrentPushInstallationState(): Promise<PushInstallationState> {
+  const installationId = await getPushInstallationId();
+  const headers = await authHeaders();
+  const response = await fetch(`${API_BASE_URL}/push/status`, { headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error ?? "PUSH_STATUS_FAILED");
+  const installation = Array.isArray(data?.installations)
+    ? data.installations.find((item: any) => item?.installation_id === installationId)
+    : null;
+  return {
+    installationId,
+    active: installation?.active === true,
+    permissionStatus: installation?.permission_status ?? null,
+  };
+}
+
 export async function registerPushInstallation(language: "no" | "en") {
   const existing = await Notifications.getPermissionsAsync();
   let status = existing.status;

@@ -857,6 +857,17 @@ export const en = {
     "pushSettings.openSettings": "Open settings",
     "pushSettings.cancel": "Cancel",
     "pushSettings.permissionNote": "You can change notification permission later in your device settings.",
+    "pushSettings.systemPermission": "System permission",
+    "pushSettings.appRegistration": "Notifications from Lost or Found",
+    "pushSettings.registrationEnabled": "Enabled",
+    "pushSettings.registrationDisabled": "Disabled",
+    "pushSettings.enableOnDevice": "Enable notifications on this device",
+    "pushSettings.disableFromApp": "Disable notifications from the app",
+    "pushSettings.permissionAndRegistrationNote": "System permission is managed in device settings. Lost or Found notifications can be enabled or disabled separately for this installation.",
+    "pushSettings.noActiveInstallation": "Notifications are not active for this device. Enable them before sending a test notification.",
+    "pushSettings.permissionNotGranted": "Notification permission has not been granted in device settings.",
+    "pushSettings.loginRequired": "Log in before changing notification settings.",
+    "pushSettings.genericError": "The notification setting could not be updated. Please try again.",
   } as const;
 
 export type TranslationKey = keyof typeof en;

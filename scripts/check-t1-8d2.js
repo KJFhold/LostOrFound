@@ -1,0 +1,10 @@
+const fs=require("fs"),path=require("path"),r=f=>fs.readFileSync(path.join(process.cwd(),f),"utf8");
+const files=["app/push-settings.tsx","src/lib/pushNotifications.ts","src/i18n/locales/en.ts","src/i18n/locales/no.ts"];
+for(const f of files)if(!fs.existsSync(path.join(process.cwd(),f)))throw new Error(`Missing ${f}`);
+const screen=r("app/push-settings.tsx"),lib=r("src/lib/pushNotifications.ts");
+if(!screen.includes('(): PushPermissionState => "undetermined"'))throw new Error("Typed permission fallback missing");
+if(!screen.includes("pushSettings.systemPermission")||!screen.includes("pushSettings.appRegistration"))throw new Error("Separate notification statuses missing");
+if(!screen.includes("installationActive && <Pressable"))throw new Error("Active-installation controls are not gated");
+if(!lib.includes("getCurrentPushInstallationState")||!lib.includes("/push/status"))throw new Error("Current installation status lookup missing");
+if(screen.includes('error?.message ?? String(error)'))throw new Error("Raw technical errors remain visible");
+console.log("OK: T1.8D.2 checks passed.");

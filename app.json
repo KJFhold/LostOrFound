@@ -52,7 +52,7 @@
             ]
           }
         ],
-        "NSLocationWhenInUseUsageDescription": "Lost or Found bruker posisjonen din for å hjelpe deg å registrere hvor noe ble mistet eller funnet.",
+        "NSLocationWhenInUseUsageDescription": "Lost or Found uses your location to help you report where an item was lost or found.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -60,7 +60,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Lost or Found bruker posisjonen din for å hjelpe deg å registrere hvor noe ble mistet eller funnet."
+          "locationWhenInUsePermission": "Lost or Found uses your location to help you report where an item was lost or found."
         }
       ],
       [

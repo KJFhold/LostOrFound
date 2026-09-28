@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
@@ -33,6 +33,20 @@ async function authHeaders() {
   const token = data.session?.access_token;
   if (!token) throw new Error("LOGIN_REQUIRED");
   return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
+
+export type PushPermissionState = "granted" | "denied" | "undetermined";
+
+export async function getPushPermissionState(): Promise<PushPermissionState> {
+  const permission = await Notifications.getPermissionsAsync();
+  if (permission.status === "granted") return "granted";
+  if (permission.status === "denied") return "denied";
+  return "undetermined";
+}
+
+export async function openPushNotificationSettings() {
+  await Linking.openSettings();
 }
 
 export async function registerPushInstallation(language: "no" | "en") {

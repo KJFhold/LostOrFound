@@ -846,6 +846,17 @@ export const en = {
     "caseDetail.lost": "Lost",
     "caseDetail.found": "Found",
     "caseDetail.details.and.photos": "Details and photos",
+    "profile.notificationSettings": "Notification settings",
+    "pushSettings.permissionIntro": "Enable notifications to receive updates about new matches, messages, observations and lost items in areas you follow.",
+    "pushSettings.statusLabel": "Status",
+    "pushSettings.statusEnabled": "Enabled",
+    "pushSettings.statusBlocked": "Blocked in device settings",
+    "pushSettings.statusNotEnabled": "Not enabled",
+    "pushSettings.permissionDeniedTitle": "Notifications are blocked",
+    "pushSettings.permissionDeniedBody": "Open device settings to allow notifications for Lost or Found.",
+    "pushSettings.openSettings": "Open settings",
+    "pushSettings.cancel": "Cancel",
+    "pushSettings.permissionNote": "You can change notification permission later in your device settings.",
   } as const;
 
 export type TranslationKey = keyof typeof en;

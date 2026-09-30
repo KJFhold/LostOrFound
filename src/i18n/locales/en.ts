@@ -904,6 +904,9 @@ export const en = {
     "alertAreas.circleType": "Place · {{radius}}",
     "alertAreas.polygonType": "Area · {{count}} points",
     "alertAreas.loginRequired": "Log in before managing notification areas.",
+    "alertAreas.editing": "Editing notification area",
+    "alertAreas.cancelEdit": "Cancel editing",
+    "alertAreas.saveChanges": "Save changes",
   } as const;
 
 export type TranslationKey = keyof typeof en;

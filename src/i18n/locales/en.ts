@@ -904,8 +904,11 @@ export const en = {
     "alertAreas.circleType": "Place · {{radius}}",
     "alertAreas.polygonType": "Area · {{count}} points",
     "alertAreas.loginRequired": "Log in before managing notification areas.",
+    "alertAreas.myAreas": "My notification areas",
+    "alertAreas.newArea": "New area",
+    "alertAreas.edit": "Edit",
+    "alertAreas.hideEditor": "Hide panel",
     "alertAreas.editing": "Editing notification area",
-    "alertAreas.cancelEdit": "Cancel editing",
     "alertAreas.saveChanges": "Save changes",
   } as const;
 

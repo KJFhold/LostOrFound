@@ -906,7 +906,10 @@ export const no: TranslationDictionary = {
     "alertAreas.circleType": "Sted · {{radius}}",
     "alertAreas.polygonType": "Område · {{count}} punkter",
     "alertAreas.loginRequired": "Logg inn før du administrerer varslingsområder.",
+    "alertAreas.myAreas": "Mine varslingsområder",
+    "alertAreas.newArea": "Nytt område",
+    "alertAreas.edit": "Rediger",
+    "alertAreas.hideEditor": "Skjul panel",
     "alertAreas.editing": "Redigerer varslingsområde",
-    "alertAreas.cancelEdit": "Avbryt redigering",
     "alertAreas.saveChanges": "Lagre endringer",
   };

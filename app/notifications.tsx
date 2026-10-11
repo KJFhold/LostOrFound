@@ -432,9 +432,19 @@ export default function NotificationsScreen() {
           return;
         }
         if (resolved.target_kind === "report") {
-          const lifecycleType = String(n.type || "").toUpperCase();
-          const section =
-            lifecycleType === "REPORT_EXPIRING" ? "active" : "history";
+          const notificationType = String(n.type || "").toUpperCase();
+          if (notificationType === "NEW_MATCH") {
+            router.push({
+              pathname: "/match",
+              params: { reportId: resolved.target_id },
+            });
+            return;
+          }
+          const section = ["REPORT_EXPIRED", "REPORT_ARCHIVED"].includes(
+            notificationType,
+          )
+            ? "history"
+            : "active";
           router.push({
             pathname: "/my-reports",
             params: { section, reportId: resolved.target_id },

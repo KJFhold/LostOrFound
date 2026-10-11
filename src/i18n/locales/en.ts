@@ -1081,6 +1081,16 @@ export const en = {
     "The case expires soon and is nearing the end of its visibility period.",
   "notifications.match.confirmed.with.message":
     "The other party confirmed the match and sent a new chat message. Open chat to continue.",
+  "cases.reactivate.lost.report": "Reactivate lost report for 30 days?",
+  "cases.reactivate.lost.report.body":
+    "This creates a reactivation order and makes the report active in new matching for 30 days. The current preview flow uses controlled test activation.",
+  "cases.reactivate.30.days": "Reactivate for 30 days",
+  "cases.reactivating": "Reactivating…",
+  "cases.reactivation.completed": "Report reactivated",
+  "cases.reactivation.completed.body":
+    "The report is active for 30 new days and matching is being refreshed.",
+  "cases.reactivation.failed": "Could not reactivate report",
+  "matchDetail.secondary.color": "Secondary color",
 } as const;
 
 export type TranslationKey = keyof typeof en;

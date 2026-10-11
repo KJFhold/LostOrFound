@@ -1079,4 +1079,14 @@ export const no: TranslationDictionary = {
     "Saken utløper snart og nærmer seg slutten av synlighetsperioden.",
   "notifications.match.confirmed.with.message":
     "Motparten har bekreftet treffet og sendt en ny chatmelding. Åpne chat for å fortsette.",
+  "cases.reactivate.lost.report": "Aktivere mistet-rapporten i 30 nye dager?",
+  "cases.reactivate.lost.report.body":
+    "Dette oppretter en reaktiveringsordre og gjør rapporten aktiv i nye treff i 30 dager. Dagens preview-flyt bruker kontrollert testaktivering.",
+  "cases.reactivate.30.days": "Aktiver i 30 nye dager",
+  "cases.reactivating": "Aktiverer…",
+  "cases.reactivation.completed": "Rapport aktivert på nytt",
+  "cases.reactivation.completed.body":
+    "Rapporten er aktiv i 30 nye dager, og treff oppdateres.",
+  "cases.reactivation.failed": "Kunne ikke aktivere rapporten på nytt",
+  "matchDetail.secondary.color": "Tilleggsfarge",
 };

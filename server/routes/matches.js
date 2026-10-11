@@ -27,7 +27,7 @@ const { notifyUser } = require("../lib/userNotify");
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
-    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function."
+    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function.",
   );
 }
 
@@ -45,24 +45,24 @@ function isAllowedStatus(s) {
 }
 
 const MATCH_SELECT = `
- id, score, status, reasons,
- lost:lost_id (
-   id, user_id, type, category, subcategory_key, title, description, color, brand,
-   occurred_at, created_at, lat, lng, location_label,
-   radius_m, search_radius_m, area_radius_m, location_radius_m,
-   status, visible_until, closed_at, archived_at,
-   reward_ore,
-   report_images ( id, path, sort_order, created_at )
- ),
- found:found_id (
-   id, user_id, type, category, subcategory_key, title, description, color, brand,
-   occurred_at, created_at, lat, lng, location_label,
-   radius_m, search_radius_m, area_radius_m, location_radius_m,
-   status, visible_until, closed_at, archived_at,
-   reward_ore,
-   report_images ( id, path, sort_order, created_at )
- )
-`;
+   id, score, status, reasons,
+   lost:lost_id (
+     id, user_id, type, category, subcategory_key, title, description, color, brand,
+     occurred_at, created_at, lat, lng, location_label,
+     radius_m, search_radius_m, area_radius_m, location_radius_m,
+     status, visible_until, closed_at, archived_at,
+     reward_ore,
+     report_images ( id, path, sort_order, created_at )
+   ),
+   found:found_id (
+     id, user_id, type, category, subcategory_key, title, description, color, brand,
+     occurred_at, created_at, lat, lng, location_label,
+     radius_m, search_radius_m, area_radius_m, location_radius_m,
+     status, visible_until, closed_at, archived_at,
+     reward_ore,
+     report_images ( id, path, sort_order, created_at )
+   )
+  `;
 
 // Adjusted time rule:
 // LOST.occurred_at is when the user believes the item was lost.
@@ -75,7 +75,8 @@ function isTimeCompatible(lost, found) {
     const lostWhen = Date.parse(lost?.occurred_at || lost?.created_at || "");
     const foundReported = Date.parse(found?.created_at || "");
     // Do not block when the available data is insufficient.
-    if (!Number.isFinite(lostWhen) || !Number.isFinite(foundReported)) return true;
+    if (!Number.isFinite(lostWhen) || !Number.isFinite(foundReported))
+      return true;
     return lostWhen <= foundReported + bufferMs;
   } catch {
     return true;
@@ -105,12 +106,12 @@ function reportRadiusMeters(rep) {
   return null;
 }
 
-
 function isActiveReport(rep) {
   if (!rep) return false;
   if (rep.status && rep.status !== "ACTIVE") return false;
   if (rep.closed_at || rep.archived_at) return false;
-  if (rep.visible_until && Date.parse(rep.visible_until) <= Date.now()) return false;
+  if (rep.visible_until && Date.parse(rep.visible_until) <= Date.now())
+    return false;
   return true;
 }
 function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -153,8 +154,16 @@ function enrichMatchAreaInfo(match) {
     let distanceM = toNumber(existingDistance);
 
     // Calculate distance_m here when it is not already available.
-    if (distanceM == null && lostLat != null && lostLng != null && foundLat != null && foundLng != null) {
-      distanceM = Math.round(haversineMeters(lostLat, lostLng, foundLat, foundLng));
+    if (
+      distanceM == null &&
+      lostLat != null &&
+      lostLng != null &&
+      foundLat != null &&
+      foundLng != null
+    ) {
+      distanceM = Math.round(
+        haversineMeters(lostLat, lostLng, foundLat, foundLng),
+      );
       reasons = upsertReason(reasons, "distance_m", distanceM);
     }
 
@@ -174,6 +183,41 @@ function enrichMatchAreaInfo(match) {
   }
 }
 
+function secondaryColorValue(report) {
+  const direct = String(report?.secondary_color || "")
+    .trim()
+    .toLowerCase();
+  if (direct) return direct;
+  const match = String(report?.description || "").match(
+    /(?:Secondary color|Tilleggsfarge):\s*([^\n]+)/i,
+  );
+  return (
+    String(match?.[1] || "")
+      .trim()
+      .toLowerCase() || null
+  );
+}
+function reportColors(report) {
+  return [report?.color, secondaryColorValue(report)]
+    .map((value) =>
+      String(value || "")
+        .trim()
+        .toLowerCase(),
+    )
+    .filter(Boolean);
+}
+function enrichMatchColorInfo(match) {
+  if (!match?.lost || !match?.found) return match;
+  const lostColors = reportColors(match.lost);
+  const foundColors = reportColors(match.found);
+  const sharedColor =
+    lostColors.find((value) => foundColors.includes(value)) || null;
+  let reasons = Array.isArray(match.reasons) ? match.reasons.slice() : [];
+  reasons = upsertReason(reasons, "color_match", !!sharedColor);
+  if (sharedColor)
+    reasons = upsertReason(reasons, "matched_color", sharedColor);
+  return { ...match, reasons };
+}
 // GET /matches?reportId=...
 router.get("/", requireUser, async (req, res) => {
   try {
@@ -188,7 +232,8 @@ router.get("/", requireUser, async (req, res) => {
       .eq("user_id", user.id)
       .single();
 
-    if (rErr || !report) return res.status(404).json({ error: "Report not found" });
+    if (rErr || !report)
+      return res.status(404).json({ error: "Report not found" });
 
     const isLost = report.type === "LOST";
 
@@ -203,7 +248,8 @@ router.get("/", requireUser, async (req, res) => {
     const filtered = (matches || [])
       .filter((m) => isActiveReport(m?.lost) && isActiveReport(m?.found))
       .filter((m) => isTimeCompatible(m?.lost, m?.found))
-      .map(enrichMatchAreaInfo);
+      .map(enrichMatchAreaInfo)
+      .map(enrichMatchColorInfo);
 
     return res.json({ matches: filtered });
   } catch (e) {
@@ -223,9 +269,11 @@ router.get("/:id", requireUser, async (req, res) => {
       .eq("id", matchId)
       .single();
 
-    if (error || !match) return res.status(404).json({ error: "Match not found" });
+    if (error || !match)
+      return res.status(404).json({ error: "Match not found" });
 
-    const owns = match?.lost?.user_id === user.id || match?.found?.user_id === user.id;
+    const owns =
+      match?.lost?.user_id === user.id || match?.found?.user_id === user.id;
     if (!owns) return res.status(403).json({ error: "Not allowed" });
 
     // Hide closed, expired, archived, and chronologically impossible matches.
@@ -236,7 +284,9 @@ router.get("/:id", requireUser, async (req, res) => {
       return res.status(404).json({ error: "Match not found" });
     }
 
-    return res.json({ match: enrichMatchAreaInfo(match) });
+    return res.json({
+      match: enrichMatchColorInfo(enrichMatchAreaInfo(match)),
+    });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
@@ -256,28 +306,42 @@ router.post("/:id/status", requireUser, async (req, res) => {
 
     const { data: match, error: mErr } = await supaAdmin
       .from("matches")
-      .select(`id, status, lost:lost_id ( user_id ), found:found_id ( user_id )`)
+      .select(
+        `id, status, lost:lost_id ( user_id ), found:found_id ( user_id )`,
+      )
       .eq("id", matchId)
       .single();
 
-    if (mErr || !match) return res.status(404).json({ error: "Match not found" });
+    if (mErr || !match)
+      return res.status(404).json({ error: "Match not found" });
 
     const ownsLost = match.lost?.user_id === user.id;
     const ownsFound = match.found?.user_id === user.id;
-    if (!ownsLost && !ownsFound) return res.status(403).json({ error: "Not allowed" });
+    if (!ownsLost && !ownsFound)
+      return res.status(403).json({ error: "Not allowed" });
 
     // 3A: The FOUND side cannot initiate contact. Only the LOST owner can confirm.
     if (status === "CONFIRMED" && !ownsLost) {
       return res.status(403).json({ error: "Only LOST owner can confirm" });
     }
 
-    const { error: uErr } = await supaAdmin.from("matches").update({ status }).eq("id", matchId);
+    const { error: uErr } = await supaAdmin
+      .from("matches")
+      .update({ status })
+      .eq("id", matchId);
     if (uErr) return res.status(400).json({ error: uErr.message });
 
     // Create the conversation when the match is confirmed.
     if (status === "CONFIRMED") {
-      const { error: cErr } = await supaAdmin.from("conversations").insert({ id: matchId });
-      if (cErr && !String(cErr.message || "").toLowerCase().includes("duplicate")) {
+      const { error: cErr } = await supaAdmin
+        .from("conversations")
+        .insert({ id: matchId });
+      if (
+        cErr &&
+        !String(cErr.message || "")
+          .toLowerCase()
+          .includes("duplicate")
+      ) {
         return res.status(500).json({ error: "Failed to create conversation" });
       }
     }
@@ -286,7 +350,9 @@ router.post("/:id/status", requireUser, async (req, res) => {
     if (status === "CONFIRMED" && match.status !== "CONFIRMED") {
       const otherUserId = ownsLost
         ? match.found?.user_id
-        : (ownsFound ? match.lost?.user_id : null);
+        : ownsFound
+          ? match.lost?.user_id
+          : null;
 
       if (otherUserId && otherUserId !== user.id) {
         try {
@@ -302,7 +368,10 @@ router.post("/:id/status", requireUser, async (req, res) => {
             },
           });
         } catch (nErr) {
-          console.warn("[matches] notify MATCH_CONFIRMED failed", nErr?.message ?? nErr);
+          console.warn(
+            "[matches] notify MATCH_CONFIRMED failed",
+            nErr?.message ?? nErr,
+          );
         }
       }
     }
@@ -313,5 +382,45 @@ router.post("/:id/status", requireUser, async (req, res) => {
   }
 });
 
-router.post("/:id/messages", requireUser, async(req,res)=>{ try { const body=String(req.body?.body||"").replace(/\s+/g," ").trim(); if(!body||body.length>1000)return res.status(400).json({error:"INVALID_MESSAGE"}); const q=await supaAdmin.from("matches").select("id,lost:lost_id(user_id),found:found_id(user_id)").eq("id",req.params.id).maybeSingle(); if(q.error)throw q.error; const m=q.data; const users=[m?.lost?.user_id,m?.found?.user_id]; if(!m||!users.includes(req.user.id))return res.status(404).json({error:"MATCH_NOT_FOUND"}); const ins=await supaAdmin.from("messages").insert({conversation_id:m.id,sender_id:req.user.id,body}).select("*").single(); if(ins.error)throw ins.error; const other=users.find(x=>x&&x!==req.user.id); if(other)await notifyUser({userId:other,type:"NEW_MESSAGE",entityType:"chat",entityId:m.id,titles:{no:"Ny melding",en:"New message"},bodies:{no:"Du har fått en ny chatmelding.",en:"You have a new chat message."}}); return res.json({ok:true,message:ins.data}); } catch(e){return res.status(500).json({error:e?.message||"MESSAGE_SEND_FAILED"});} });
+router.post("/:id/messages", requireUser, async (req, res) => {
+  try {
+    const body = String(req.body?.body || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!body || body.length > 1000)
+      return res.status(400).json({ error: "INVALID_MESSAGE" });
+    const q = await supaAdmin
+      .from("matches")
+      .select("id,lost:lost_id(user_id),found:found_id(user_id)")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (q.error) throw q.error;
+    const m = q.data;
+    const users = [m?.lost?.user_id, m?.found?.user_id];
+    if (!m || !users.includes(req.user.id))
+      return res.status(404).json({ error: "MATCH_NOT_FOUND" });
+    const ins = await supaAdmin
+      .from("messages")
+      .insert({ conversation_id: m.id, sender_id: req.user.id, body })
+      .select("*")
+      .single();
+    if (ins.error) throw ins.error;
+    const other = users.find((x) => x && x !== req.user.id);
+    if (other)
+      await notifyUser({
+        userId: other,
+        type: "NEW_MESSAGE",
+        entityType: "chat",
+        entityId: m.id,
+        titles: { no: "Ny melding", en: "New message" },
+        bodies: {
+          no: "Du har fått en ny chatmelding.",
+          en: "You have a new chat message.",
+        },
+      });
+    return res.json({ ok: true, message: ins.data });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || "MESSAGE_SEND_FAILED" });
+  }
+});
 module.exports = router;

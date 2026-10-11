@@ -698,8 +698,8 @@ export default function MyReportsScreen() {
       await load();
       setSection("active");
       Alert.alert(
-        t("cases.reactivation.completed"),
-        t("cases.reactivation.completed.body"),
+        t("cases.reactivation.success.title"),
+        t("cases.reactivation.success.body"),
       );
     } catch (error: any) {
       Alert.alert(
@@ -1073,9 +1073,19 @@ export default function MyReportsScreen() {
                 </Text>
               </View>
             )}
-            <View style={dialogStyles.actions}>
+            <View
+              style={[
+                dialogStyles.actions,
+                confirmDialog?.kind === "reactivateLost" &&
+                  dialogStyles.paymentActions,
+              ]}
+            >
               <Pressable
-                style={dialogStyles.cancelBtn}
+                style={[
+                  dialogStyles.cancelBtn,
+                  confirmDialog?.kind === "reactivateLost" &&
+                    dialogStyles.paymentActionButton,
+                ]}
                 onPress={() => setConfirmDialog(null)}
               >
                 <Text style={dialogStyles.cancelText}>{t("cases.cancel")}</Text>
@@ -1083,6 +1093,8 @@ export default function MyReportsScreen() {
               <Pressable
                 style={[
                   dialogStyles.confirmBtn,
+                  confirmDialog?.kind === "reactivateLost" &&
+                    dialogStyles.paymentActionButton,
                   confirmDialog?.kind === "delete" &&
                     dialogStyles.deleteConfirmBtn,
                 ]}
@@ -1336,7 +1348,13 @@ const dialogStyles = StyleSheet.create({
     marginBottom: 8,
   },
   paymentLabel: { color: "#64748B", fontWeight: "800" },
-  paymentValue: { color: "#0F172A", fontWeight: "900" },
+  paymentValue: {
+    color: "#0F172A",
+    fontWeight: "900",
+    flexShrink: 1,
+    textAlign: "right",
+    marginLeft: 12,
+  },
   paymentPrice: { color: "#1D4ED8", fontWeight: "900", fontSize: 20 },
   testModeText: {
     marginTop: 5,
@@ -1345,6 +1363,8 @@ const dialogStyles = StyleSheet.create({
     lineHeight: 19,
   },
   actions: { flexDirection: "row", gap: 10, marginTop: 20 },
+  paymentActions: { flexDirection: "column-reverse", gap: 10 },
+  paymentActionButton: { width: "100%", flex: 0 },
   cancelBtn: {
     flex: 1,
     minHeight: 46,
@@ -1364,5 +1384,11 @@ const dialogStyles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
   },
   deleteConfirmBtn: { backgroundColor: "#B42318" },
-  confirmText: { color: "#FFF", fontWeight: "900" },
+  confirmText: {
+    color: "#FFF",
+    fontWeight: "900",
+    textAlign: "center",
+    width: "100%",
+    paddingHorizontal: 8,
+  },
 });

@@ -1109,6 +1109,10 @@ export const en = {
     "The reports share a primary or secondary color. This is included in the displayed match level.",
   "match.score.explanation":
     "The match level is based on item, color, location, time and available text details.",
+  "cases.reactivation.success.title": "Report activated",
+  "cases.reactivation.success.body":
+    "The report is now active for 30 new days. Matches update automatically.",
+  "match.ranked.matches.for.your.case": "Best matches first",
 } as const;
 
 export type TranslationKey = keyof typeof en;

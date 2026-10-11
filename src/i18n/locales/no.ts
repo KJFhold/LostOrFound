@@ -1106,4 +1106,8 @@ export const no: TranslationDictionary = {
     "Rapportene har samme hoved- eller tilleggsfarge. Dette er tatt med i vist treffnivå.",
   "match.score.explanation":
     "Treffnivået bygger på gjenstand, farge, sted, tid og tilgjengelige tekstdetaljer.",
+  "cases.reactivation.success.title": "Rapporten er aktivert",
+  "cases.reactivation.success.body":
+    "Rapporten er nå aktiv i 30 nye dager. Treffene oppdateres automatisk.",
+  "match.ranked.matches.for.your.case": "Beste treff øverst",
 };

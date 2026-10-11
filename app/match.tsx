@@ -17,7 +17,6 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
-  Image,
 } from "react-native";
 import {
   Stack,
@@ -883,11 +882,6 @@ export default function MatchScreen() {
           }
           return next;
         });
-        try {
-          for (const url of Object.values(urlMap)) {
-            Image.prefetch(url);
-          }
-        } catch {}
       }
       const ids = list.map((m) => m.id);
       if (ids.length) {
@@ -1009,7 +1003,11 @@ export default function MatchScreen() {
     );
   }
   const visibleMatches = useMemo(() => {
-    return matches.filter((m) => scoreLevel(m.score) >= 2);
+    return matches
+      .filter((item) => scoreLevel(item.score) >= 2)
+      .sort(
+        (first, second) => Number(second.score || 0) - Number(first.score || 0),
+      );
   }, [matches]);
   return (
     <>
@@ -1017,7 +1015,7 @@ export default function MatchScreen() {
       <View style={styles.safe}>
         <PremiumHeader
           title={tr(language, "match.matches")}
-          subtitle={tr(language, "match.possible.matches.for.your.case")}
+          subtitle={tr(language, "match.ranked.matches.for.your.case")}
           onBack={() => router.back()}
           right={<AuthHeaderAction />}
         />
@@ -1052,55 +1050,45 @@ export default function MatchScreen() {
               const otherLabel = ownIsLost
                 ? tr(language, "match.other.party")
                 : tr(language, "match.your.case");
-              const ownImgUri = ownIsLost
-                ? thumbMap[item.id]?.own
-                : thumbMap[item.id]?.other;
-              const otherImgUri = ownIsLost
-                ? thumbMap[item.id]?.other
-                : thumbMap[item.id]?.own;
+
               const title = headlineTitle(item, language);
               const detailRows = detailRowsForMatch(item, reportId, language);
               if (level < 2) return null;
-              const summary = detailRows.slice(0, 3);
+              const summary = detailRows.slice(0, 4);
+              const rank =
+                visibleMatches.findIndex(
+                  (candidate) => candidate.id === item.id,
+                ) + 1;
               return (
                 <Pressable
-                  style={styles.compactCard}
-                  onPress={() => router.push(`/match-comparison/${item.id}`)}
+                  style={styles.listRow}
+                  onPress={() => router.push(`/matches/${item.id}`)}
                 >
-                  <View
-                    style={[styles.compactAccent, { backgroundColor: tone.bg }]}
-                  />
-                  <View style={styles.compactImageWrap}>
-                    {otherImgUri ? (
-                      <Image
-                        source={{ uri: otherImgUri }}
-                        style={styles.compactImage}
-                      />
-                    ) : (
-                      <View style={styles.compactPlaceholder} />
-                    )}
+                  <View style={[styles.rankPill, { backgroundColor: tone.bg }]}>
+                    <Text style={styles.rankText}>{rank}</Text>
                   </View>
-                  <View style={styles.compactContent}>
-                    <View style={styles.compactTop}>
-                      <Text style={styles.compactTitle} numberOfLines={1}>
+                  <View style={styles.listContent}>
+                    <View style={styles.listTopRow}>
+                      <Text style={styles.listTitle} numberOfLines={1}>
                         {title}
                       </Text>
                       {unread && <Text style={styles.unreadDot}>●</Text>}
                     </View>
-                    <Text style={[styles.compactLevel, { color: tone.bg }]}>
+                    <Text style={[styles.listLevel, { color: tone.bg }]}>
                       {scoreLabel(item.score, language)}
                     </Text>
-                    {summary.map((row, idx) => (
+                    {summary.map((row, index) => (
                       <Text
-                        key={`${item.id}-summary-${idx}`}
-                        style={styles.compactMeta}
+                        key={`${item.id}-summary-${index}`}
+                        style={styles.listMeta}
                         numberOfLines={1}
                       >
                         {row.label}: {row.value}
+                        {row.note ? ` · ${row.note}` : ""}
                       </Text>
                     ))}
-                    <Text style={styles.compactOpen}>
-                      {tr(language, "match.open.comparison")}
+                    <Text style={styles.listOpen}>
+                      {tr(language, "match.view.full.details")}
                     </Text>
                   </View>
                 </Pressable>
@@ -1120,6 +1108,52 @@ export default function MatchScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    minHeight: 132,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 16,
+    marginBottom: 10,
+    backgroundColor: theme.colors.card,
+    padding: 14,
+  },
+  rankPill: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  rankText: { color: "#FFF", fontWeight: "900" },
+  listContent: { flex: 1 },
+  listTopRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  listTitle: {
+    flex: 1,
+    color: theme.colors.text,
+    fontWeight: "900",
+    fontSize: 16,
+  },
+  listLevel: {
+    marginTop: 3,
+    fontWeight: "900",
+    fontSize: 12,
+    textTransform: "uppercase",
+  },
+  listMeta: {
+    marginTop: 5,
+    color: theme.colors.muted,
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  listOpen: {
+    marginTop: 9,
+    color: theme.colors.primary,
+    fontWeight: "900",
+    fontSize: 13,
+  },
   compactCard: {
     flexDirection: "row",
     minHeight: 126,

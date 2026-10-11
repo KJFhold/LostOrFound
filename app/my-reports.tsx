@@ -631,10 +631,7 @@ export default function MyReportsScreen() {
     );
     const data = await res.json().catch(() => null);
     if (!res.ok) {
-      Alert.alert(
-        t("cases.error"),
-        data?.error ?? t("cases.could.not.delete.case"),
-      );
+      Alert.alert(t("cases.delete.failed"), t("cases.delete.failed.body"));
       return;
     }
 
@@ -764,7 +761,7 @@ export default function MyReportsScreen() {
           "cases.keep.the.report.active.for.up.to.30.more.days.found.reports.can.remain",
         )
       : confirmDialog?.kind === "reactivateLost"
-        ? t("cases.reactivate.lost.report.body")
+        ? t("cases.reactivate.payment.summary")
         : confirmDialog?.kind === "close"
           ? t(
               "cases.the.case.stays.in.my.cases.but.it.will.no.longer.be.used.for.new.match",
@@ -1055,6 +1052,27 @@ export default function MyReportsScreen() {
             </View>
             <Text style={dialogStyles.title}>{dialogTitle}</Text>
             <Text style={dialogStyles.body}>{dialogBody}</Text>
+            {confirmDialog?.kind === "reactivateLost" && (
+              <View style={dialogStyles.paymentSummary}>
+                <View style={dialogStyles.paymentRow}>
+                  <Text style={dialogStyles.paymentLabel}>
+                    {t("cases.reactivation.product")}
+                  </Text>
+                  <Text style={dialogStyles.paymentValue}>
+                    {t("cases.reactivation.30.days")}
+                  </Text>
+                </View>
+                <View style={dialogStyles.paymentRow}>
+                  <Text style={dialogStyles.paymentLabel}>
+                    {t("cases.test.price")}
+                  </Text>
+                  <Text style={dialogStyles.paymentPrice}>99 kr</Text>
+                </View>
+                <Text style={dialogStyles.testModeText}>
+                  {t("cases.test.payment.notice")}
+                </Text>
+              </View>
+            )}
             <View style={dialogStyles.actions}>
               <Pressable
                 style={dialogStyles.cancelBtn}
@@ -1073,7 +1091,9 @@ export default function MyReportsScreen() {
                 <Text style={dialogStyles.confirmText}>
                   {confirmDialog?.kind === "extend" ||
                   confirmDialog?.kind === "reactivateLost"
-                    ? t("cases.reactivate.2")
+                    ? confirmDialog?.kind === "reactivateLost"
+                      ? t("cases.complete.test.payment")
+                      : t("cases.reactivate.2")
                     : confirmDialog?.kind === "close"
                       ? t("cases.close.case.2")
                       : t("cases.delete")}
@@ -1300,6 +1320,29 @@ const dialogStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     fontWeight: "600",
+  },
+  paymentSummary: {
+    marginTop: 16,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  paymentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  paymentLabel: { color: "#64748B", fontWeight: "800" },
+  paymentValue: { color: "#0F172A", fontWeight: "900" },
+  paymentPrice: { color: "#1D4ED8", fontWeight: "900", fontSize: 20 },
+  testModeText: {
+    marginTop: 5,
+    color: "#92400E",
+    fontWeight: "700",
+    lineHeight: 19,
   },
   actions: { flexDirection: "row", gap: 10, marginTop: 20 },
   cancelBtn: {

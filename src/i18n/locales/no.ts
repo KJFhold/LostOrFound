@@ -1089,4 +1089,21 @@ export const no: TranslationDictionary = {
     "Rapporten er aktiv i 30 nye dager, og treff oppdateres.",
   "cases.reactivation.failed": "Kunne ikke aktivere rapporten på nytt",
   "matchDetail.secondary.color": "Tilleggsfarge",
+  "cases.reactivate.payment.summary":
+    "Kontroller testkjøpet før rapporten aktiveres i 30 nye dager.",
+  "cases.reactivation.product": "Produkt",
+  "cases.reactivation.30.days": "Reaktivering av rapport, 30 dager",
+  "cases.test.price": "Testpris",
+  "cases.test.payment.notice":
+    "Testmodus: Ingen ekte betaling trekkes. Bekreftelse oppretter og aktiverer en testordre.",
+  "cases.complete.test.payment": "Fullfør testbetaling",
+  "cases.delete.failed": "Kunne ikke slette rapporten",
+  "cases.delete.failed.body": "Rapporten kunne ikke slettes. Prøv igjen.",
+  "match.open.comparison": "Åpne sammenligning",
+  "match.comparison": "Treffsammenligning",
+  "match.view.full.details": "Se alle detaljer",
+  "match.shared.color.explanation":
+    "Rapportene har samme hoved- eller tilleggsfarge. Dette er tatt med i vist treffnivå.",
+  "match.score.explanation":
+    "Treffnivået bygger på gjenstand, farge, sted, tid og tilgjengelige tekstdetaljer.",
 };

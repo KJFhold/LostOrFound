@@ -1091,6 +1091,24 @@ export const en = {
     "The report is active for 30 new days and matching is being refreshed.",
   "cases.reactivation.failed": "Could not reactivate report",
   "matchDetail.secondary.color": "Secondary color",
+  "cases.reactivate.payment.summary":
+    "Review the test purchase before activating this report for 30 new days.",
+  "cases.reactivation.product": "Product",
+  "cases.reactivation.30.days": "Report reactivation, 30 days",
+  "cases.test.price": "Test price",
+  "cases.test.payment.notice":
+    "Test mode: no real payment is charged. Confirming creates and activates a test order.",
+  "cases.complete.test.payment": "Complete test payment",
+  "cases.delete.failed": "Could not delete report",
+  "cases.delete.failed.body":
+    "The report could not be deleted. Please try again.",
+  "match.open.comparison": "Open comparison",
+  "match.comparison": "Match comparison",
+  "match.view.full.details": "View full details",
+  "match.shared.color.explanation":
+    "The reports share a primary or secondary color. This is included in the displayed match level.",
+  "match.score.explanation":
+    "The match level is based on item, color, location, time and available text details.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

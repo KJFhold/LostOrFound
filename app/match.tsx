@@ -1061,115 +1061,47 @@ export default function MatchScreen() {
               const title = headlineTitle(item, language);
               const detailRows = detailRowsForMatch(item, reportId, language);
               if (level < 2) return null;
+              const summary = detailRows.slice(0, 3);
               return (
                 <Pressable
-                  style={styles.card}
-                  onPress={() => router.push(`/matches/${item.id}`)}
+                  style={styles.compactCard}
+                  onPress={() => router.push(`/match-comparison/${item.id}`)}
                 >
-                  <View style={[styles.banner, { backgroundColor: tone.bg }]}>
-                    <Text style={[styles.bannerTxt, { color: tone.fg }]}>
+                  <View
+                    style={[styles.compactAccent, { backgroundColor: tone.bg }]}
+                  />
+                  <View style={styles.compactImageWrap}>
+                    {otherImgUri ? (
+                      <Image
+                        source={{ uri: otherImgUri }}
+                        style={styles.compactImage}
+                      />
+                    ) : (
+                      <View style={styles.compactPlaceholder} />
+                    )}
+                  </View>
+                  <View style={styles.compactContent}>
+                    <View style={styles.compactTop}>
+                      <Text style={styles.compactTitle} numberOfLines={1}>
+                        {title}
+                      </Text>
+                      {unread && <Text style={styles.unreadDot}>●</Text>}
+                    </View>
+                    <Text style={[styles.compactLevel, { color: tone.bg }]}>
                       {scoreLabel(item.score, language)}
                     </Text>
-                    {unread && (
-                      <Text style={[styles.bannerDot, { color: tone.fg }]}>
-                        ●
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.pairRow}>
-                    <View style={styles.pairCol}>
-                      <Text style={styles.pairMeta}>{ownLabel}</Text>
-                      <View style={styles.pairImgWrap}>
-                        {ownImgUri ? (
-                          <Image
-                            source={{ uri: ownImgUri }}
-                            style={styles.pairImg}
-                          />
-                        ) : (
-                          <View style={styles.pairPlaceholder} />
-                        )}
-                      </View>
-                    </View>
-                    <View style={styles.pairCol}>
-                      <Text style={styles.pairMeta}>{otherLabel}</Text>
-                      <View style={styles.pairImgWrap}>
-                        {otherImgUri ? (
-                          <Image
-                            source={{ uri: otherImgUri }}
-                            style={styles.pairImg}
-                          />
-                        ) : (
-                          <View style={styles.pairPlaceholder} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.divider} />
-                  <Text style={styles.summaryHeading}>{title}</Text>
-                  <Text style={styles.sectionLabel}>
-                    {tr(language, "match.key.details")}
-                  </Text>
-                  <View style={styles.reasonList}>
-                    {detailRows.map((row, idx) => {
-                      const accent = similarityAccent(row.tone);
-                      return (
-                        <View
-                          key={`${item.id}-r-${idx}`}
-                          style={styles.reasonRow}
-                        >
-                          <Text
-                            style={[styles.reasonIcon, { color: accent.color }]}
-                          >
-                            {accent.icon}
-                          </Text>
-                          <Text style={styles.reasonTxt}>
-                            <Text style={styles.reasonLabel}>
-                              {row.label}:{" "}
-                            </Text>
-                            {row.value}
-                            {!!row.note && (
-                              <Text style={styles.reasonNote}>{`
-  ${row.note}`}</Text>
-                            )}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                  <View style={styles.actionsRow}>
-                    <Pressable
-                      style={[styles.actionBtn, styles.actionBtnGhost]}
-                      onPress={() => router.push(`/matches/${item.id}`)}
-                    >
-                      <Text style={styles.actionTxtGhost}>
-                        {tr(language, "match.view.details")}
-                      </Text>
-                    </Pressable>
-                    {item.status === "CONFIRMED" ? (
-                      <Pressable
-                        style={[styles.actionBtn, styles.actionBtnPrimary]}
-                        onPress={() => router.push(`/chat/${item.id}`)}
+                    {summary.map((row, idx) => (
+                      <Text
+                        key={`${item.id}-summary-${idx}`}
+                        style={styles.compactMeta}
+                        numberOfLines={1}
                       >
-                        <Text style={styles.actionTxtPrimary}>
-                          {tr(language, "match.open.chat")}
-                        </Text>
-                      </Pressable>
-                    ) : ownIsLost ? (
-                      <Pressable
-                        style={[styles.actionBtn, styles.actionBtnMuted]}
-                        onPress={() => router.push(`/matches/${item.id}`)}
-                      >
-                        <Text style={styles.actionTxtMuted}>
-                          {tr(language, "match.confirm.in.details")}
-                        </Text>
-                      </Pressable>
-                    ) : (
-                      <View style={[styles.actionBtn, styles.actionBtnMuted]}>
-                        <Text style={styles.actionTxtMuted}>
-                          {tr(language, "match.waiting.for.approval")}
-                        </Text>
-                      </View>
-                    )}
+                        {row.label}: {row.value}
+                      </Text>
+                    ))}
+                    <Text style={styles.compactOpen}>
+                      {tr(language, "match.open.comparison")}
+                    </Text>
                   </View>
                 </Pressable>
               );
@@ -1188,6 +1120,51 @@ export default function MatchScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  compactCard: {
+    flexDirection: "row",
+    minHeight: 126,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 16,
+    marginBottom: 10,
+    backgroundColor: theme.colors.card,
+    overflow: "hidden",
+  },
+  compactAccent: { width: 7 },
+  compactImageWrap: {
+    width: 108,
+    margin: 10,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E2E8F0",
+  },
+  compactImage: { width: "100%", height: "100%" },
+  compactPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#E2E8F0",
+  },
+  compactContent: { flex: 1, paddingVertical: 12, paddingRight: 12 },
+  compactTop: { flexDirection: "row", alignItems: "center", gap: 6 },
+  compactTitle: {
+    flex: 1,
+    color: theme.colors.text,
+    fontWeight: "900",
+    fontSize: 15,
+  },
+  compactLevel: { marginTop: 3, fontWeight: "900", fontSize: 12 },
+  compactMeta: {
+    marginTop: 4,
+    color: theme.colors.muted,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  compactOpen: {
+    marginTop: 7,
+    color: theme.colors.primary,
+    fontWeight: "900",
+    fontSize: 12,
+  },
   card: {
     padding: 12,
     borderWidth: 1,

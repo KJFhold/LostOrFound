@@ -17,7 +17,7 @@ const requireUser = authModule?.requireUser || authModule;
 
 if (!supaAdmin || typeof supaAdmin.from !== "function") {
   throw new Error(
-    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function."
+    "Supabase admin client is not initialized correctly: supaAdmin.from is not a function.",
   );
 }
 
@@ -31,7 +31,8 @@ async function userOwnsMatch(matchId, userId) {
   if (error) throw error;
   if (!data) return null;
 
-  const owns = data?.lost?.user_id === userId || data?.found?.user_id === userId;
+  const owns =
+    data?.lost?.user_id === userId || data?.found?.user_id === userId;
   return owns ? { ok: true, kind: "match", id: matchId } : null;
 }
 
@@ -77,7 +78,8 @@ async function userCanAccessObservation(observationId, userId) {
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const allowed = data.observer_user_id === userId || data.report_owner_user_id === userId;
+  const allowed =
+    data.observer_user_id === userId || data.report_owner_user_id === userId;
   return allowed ? { ok: true, kind: "observation", id: observationId } : null;
 }
 
@@ -87,22 +89,46 @@ async function resolveNotificationTarget(notification, userId) {
   const type = String(notification?.type || "").toUpperCase();
 
   if (!entityId) {
-    return { ok: false, reason: "TARGET_NOT_FOUND", kind: entityType || "unknown", id: null };
+    return {
+      ok: false,
+      reason: "TARGET_NOT_FOUND",
+      kind: entityType || "unknown",
+      id: null,
+    };
   }
 
   if (type === "AREA_ALERT_OBSERVATION" || entityType === "observation") {
     const observationTarget = await userCanAccessObservation(entityId, userId);
-    if (!observationTarget) return { ok: false, reason: "TARGET_NOT_FOUND", kind: "observation", id: entityId };
+    if (!observationTarget)
+      return {
+        ok: false,
+        reason: "TARGET_NOT_FOUND",
+        kind: "observation",
+        id: entityId,
+      };
     return observationTarget;
   }
-  if (type === "AREA_ALERT" || type === "GEO_ALERT" || entityType === "area_alert_campaign") {
+  if (
+    type === "AREA_ALERT" ||
+    type === "GEO_ALERT" ||
+    entityType === "area_alert_campaign"
+  ) {
     const areaAlertTarget = await userCanAccessAreaAlert(entityId, userId);
     if (!areaAlertTarget) {
-      return { ok: false, reason: "TARGET_NOT_FOUND", kind: "areaAlert", id: entityId };
+      return {
+        ok: false,
+        reason: "TARGET_NOT_FOUND",
+        kind: "areaAlert",
+        id: entityId,
+      };
     }
     return areaAlertTarget;
   }
-  if (type === "NEW_MESSAGE" || entityType === "chat" || entityType === "match") {
+  if (
+    type === "NEW_MESSAGE" ||
+    entityType === "chat" ||
+    entityType === "match"
+  ) {
     const matchTarget = await userOwnsMatch(entityId, userId);
     if (!matchTarget) {
       return {
@@ -121,18 +147,30 @@ async function resolveNotificationTarget(notification, userId) {
   if (entityType === "report") {
     const reportTarget = await userOwnsReport(entityId, userId);
     if (!reportTarget) {
-      return { ok: false, reason: "TARGET_NOT_FOUND", kind: "report", id: entityId };
+      return {
+        ok: false,
+        reason: "TARGET_NOT_FOUND",
+        kind: "report",
+        id: entityId,
+      };
     }
     return { ok: true, kind: "report", id: entityId };
   }
 
-  return { ok: false, reason: "UNSUPPORTED_TARGET", kind: entityType || "unknown", id: entityId };
+  return {
+    ok: false,
+    reason: "UNSUPPORTED_TARGET",
+    kind: entityType || "unknown",
+    id: entityId,
+  };
 }
 
 async function getUserNotification(id, userId) {
   const { data, error } = await supaAdmin
     .from("notifications")
-    .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key")
+    .select(
+      "id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key",
+    )
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -141,7 +179,75 @@ async function getUserNotification(id, userId) {
   return data || null;
 }
 
-async function getReportContext(n,userId){const type=String(n?.type||"").toUpperCase(),et=String(n?.entity_type||"").toLowerCase(),eid=String(n?.entity_id||"");let rid=et==="report"?eid:null;if(et==="observation"||["AREA_ALERT_OBSERVATION","OBSERVATION_MESSAGE","OBSERVATION_STATUS"].includes(type)){const q=await supaAdmin.from("area_alert_observations").select("report_id").eq("id",eid).maybeSingle();if(!q.error)rid=q.data?.report_id||null;}if(et==="area_alert_campaign"||["AREA_ALERT","GEO_ALERT"].includes(type)){const q=await supaAdmin.from("geo_alert_campaigns").select("report_id").eq("id",eid).maybeSingle();if(!q.error)rid=q.data?.report_id||null;}if(!rid)return null;const q=await supaAdmin.from("reports").select("id,type,category,subcategory_key,subcategory_custom,color,brand,location_label").eq("id",rid).is("deleted_at",null).maybeSingle();return q.error?null:q.data||null;}
+async function getReportContext(notification, userId) {
+  const type = String(notification?.type || "").toUpperCase();
+  const entityType = String(notification?.entity_type || "").toLowerCase();
+  const entityId = String(notification?.entity_id || "");
+  let reportId = entityType === "report" ? entityId : null;
+  if (
+    entityType === "match" ||
+    ["NEW_MATCH", "MATCH_CONFIRMED", "NEW_MESSAGE"].includes(type)
+  ) {
+    const matchResult = await supaAdmin
+      .from("matches")
+      .select("lost_id,found_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (!matchResult.error && matchResult.data) {
+      const candidateIds = [
+        matchResult.data.lost_id,
+        matchResult.data.found_id,
+      ].filter(Boolean);
+      if (candidateIds.length) {
+        const ownedReport = await supaAdmin
+          .from("reports")
+          .select("id")
+          .in("id", candidateIds)
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .limit(1)
+          .maybeSingle();
+        if (!ownedReport.error) reportId = ownedReport.data?.id || null;
+      }
+    }
+  }
+  if (
+    entityType === "observation" ||
+    [
+      "AREA_ALERT_OBSERVATION",
+      "OBSERVATION_MESSAGE",
+      "OBSERVATION_STATUS",
+    ].includes(type)
+  ) {
+    const result = await supaAdmin
+      .from("area_alert_observations")
+      .select("report_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (!result.error) reportId = result.data?.report_id || null;
+  }
+  if (
+    entityType === "area_alert_campaign" ||
+    ["AREA_ALERT", "GEO_ALERT"].includes(type)
+  ) {
+    const result = await supaAdmin
+      .from("geo_alert_campaigns")
+      .select("report_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (!result.error) reportId = result.data?.report_id || null;
+  }
+  if (!reportId) return null;
+  const result = await supaAdmin
+    .from("reports")
+    .select(
+      "id,type,category,subcategory_key,subcategory_custom,color,brand,location_label",
+    )
+    .eq("id", reportId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  return result.error ? null : result.data || null;
+}
 // GET /notifications?limit=50
 router.get("/", requireUser, async (req, res) => {
   try {
@@ -152,7 +258,9 @@ router.get("/", requireUser, async (req, res) => {
 
     const { data, error } = await supaAdmin
       .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, agg_count, notification_key")
+      .select(
+        "id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, agg_count, notification_key",
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -163,8 +271,13 @@ router.get("/", requireUser, async (req, res) => {
       (data || []).map(async (n) => {
         try {
           const target = await resolveNotificationTarget(n, userId);
-          const reportContext=await getReportContext(n,userId);
-          return {...n,target_status:target.ok?"ok":"missing",target_kind:target.kind,report_context:reportContext};
+          const reportContext = await getReportContext(n, userId);
+          return {
+            ...n,
+            target_status: target.ok ? "ok" : "missing",
+            target_kind: target.kind,
+            report_context: reportContext,
+          };
         } catch {
           return {
             ...n,
@@ -172,7 +285,7 @@ router.get("/", requireUser, async (req, res) => {
             target_kind: String(n?.entity_type || "unknown"),
           };
         }
-      })
+      }),
     );
 
     return res.json({ notifications });
@@ -222,7 +335,11 @@ router.get("/:id/resolve", requireUser, async (req, res) => {
       });
     }
 
-    return res.json({ ok: true, target_kind: target.kind, target_id: target.id });
+    return res.json({
+      ok: true,
+      target_kind: target.kind,
+      target_id: target.id,
+    });
   } catch (e) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
   }
@@ -282,7 +399,9 @@ router.delete("/missing", requireUser, async (req, res) => {
 
     const { data, error } = await supaAdmin
       .from("notifications")
-      .select("id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key")
+      .select(
+        "id, user_id, type, entity_type, entity_id, title, body, created_at, read_at, notification_key",
+      )
       .eq("user_id", userId)
       .limit(300);
 

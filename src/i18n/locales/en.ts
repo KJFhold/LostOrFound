@@ -1072,6 +1072,9 @@ export const en = {
   "alertAreas.category.clothing": "Clothing",
   "alertAreas.category.sports": "Sports",
   "alertAreas.category.transport": "Transport",
+  "report.create.choose.date": "Choose date",
+  "report.create.open.calendar": "Open calendar",
+  "report.create.date.cannot.be.in.future": "The date cannot be in the future.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

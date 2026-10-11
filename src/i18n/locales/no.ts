@@ -1070,4 +1070,7 @@ export const no: TranslationDictionary = {
   "alertAreas.category.clothing": "Klær",
   "alertAreas.category.sports": "Sport",
   "alertAreas.category.transport": "Transport",
+  "report.create.choose.date": "Velg dato",
+  "report.create.open.calendar": "Åpne kalender",
+  "report.create.date.cannot.be.in.future": "Datoen kan ikke være i fremtiden.",
 };

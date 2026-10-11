@@ -45,24 +45,24 @@ function isAllowedStatus(s) {
 }
 
 const MATCH_SELECT = `
-   id, score, status, reasons,
-   lost:lost_id (
-     id, user_id, type, category, subcategory_key, title, description, color, brand,
-     occurred_at, created_at, lat, lng, location_label,
-     radius_m, search_radius_m, area_radius_m, location_radius_m,
-     status, visible_until, closed_at, archived_at,
-     reward_ore,
-     report_images ( id, path, sort_order, created_at )
-   ),
-   found:found_id (
-     id, user_id, type, category, subcategory_key, title, description, color, brand,
-     occurred_at, created_at, lat, lng, location_label,
-     radius_m, search_radius_m, area_radius_m, location_radius_m,
-     status, visible_until, closed_at, archived_at,
-     reward_ore,
-     report_images ( id, path, sort_order, created_at )
-   )
-  `;
+     id, score, status, reasons,
+     lost:lost_id (
+       id, user_id, type, category, subcategory_key, title, description, color, brand,
+       occurred_at, created_at, lat, lng, location_label,
+       radius_m, search_radius_m, area_radius_m, location_radius_m,
+       status, visible_until, closed_at, archived_at,
+       reward_ore,
+       report_images ( id, path, sort_order, created_at )
+     ),
+     found:found_id (
+       id, user_id, type, category, subcategory_key, title, description, color, brand,
+       occurred_at, created_at, lat, lng, location_label,
+       radius_m, search_radius_m, area_radius_m, location_radius_m,
+       status, visible_until, closed_at, archived_at,
+       reward_ore,
+       report_images ( id, path, sort_order, created_at )
+     )
+    `;
 
 // Adjusted time rule:
 // LOST.occurred_at is when the user believes the item was lost.
@@ -213,10 +213,21 @@ function enrichMatchColorInfo(match) {
   const sharedColor =
     lostColors.find((value) => foundColors.includes(value)) || null;
   let reasons = Array.isArray(match.reasons) ? match.reasons.slice() : [];
+  const previousColorMatch =
+    reasons.find((entry) => entry?.k === "color_match")?.v === true;
   reasons = upsertReason(reasons, "color_match", !!sharedColor);
   if (sharedColor)
     reasons = upsertReason(reasons, "matched_color", sharedColor);
-  return { ...match, reasons };
+  const score =
+    sharedColor && !previousColorMatch
+      ? Math.min(100, Number(match.score || 0) + 10)
+      : Number(match.score || 0);
+  reasons = upsertReason(
+    reasons,
+    "display_score_adjustment",
+    score - Number(match.score || 0),
+  );
+  return { ...match, score, reasons };
 }
 // GET /matches?reportId=...
 router.get("/", requireUser, async (req, res) => {

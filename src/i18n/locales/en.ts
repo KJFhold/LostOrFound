@@ -1075,6 +1075,12 @@ export const en = {
   "report.create.choose.date": "Choose date",
   "report.create.open.calendar": "Open calendar",
   "report.create.date.cannot.be.in.future": "The date cannot be in the future.",
+  "notifications.case.expired.combined":
+    "The case has expired and is no longer active in new matching.",
+  "notifications.case.expiring.combined":
+    "The case expires soon and is nearing the end of its visibility period.",
+  "notifications.match.confirmed.with.message":
+    "The other party confirmed the match and sent a new chat message. Open chat to continue.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1073,4 +1073,10 @@ export const no: TranslationDictionary = {
   "report.create.choose.date": "Velg dato",
   "report.create.open.calendar": "Åpne kalender",
   "report.create.date.cannot.be.in.future": "Datoen kan ikke være i fremtiden.",
+  "notifications.case.expired.combined":
+    "Saken er utløpt og ikke lenger aktiv i nye treff.",
+  "notifications.case.expiring.combined":
+    "Saken utløper snart og nærmer seg slutten av synlighetsperioden.",
+  "notifications.match.confirmed.with.message":
+    "Motparten har bekreftet treffet og sendt en ny chatmelding. Åpne chat for å fortsette.",
 };

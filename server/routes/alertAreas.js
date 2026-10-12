@@ -70,21 +70,52 @@ router.put("/current-location", requireUser, async (req, res) => {
       return res.status(400).json({ error: "INVALID_RADIUS" });
     if (!CURRENT_LOCATION_EXPIRIES.has(expiryHours))
       return res.status(400).json({ error: "INVALID_EXPIRY" });
-    const { data, error } = await supaAdmin.rpc(
-      "upsert_current_location_watch_area_v2",
-      {
-        p_user_id: req.user.id,
-        p_lat: latitude,
-        p_lng: longitude,
-        p_radius_m: radiusM,
-        p_category_keys: cleanCategories(req.body?.categoryKeys),
-        p_all_categories: req.body?.allCategories !== false,
-        p_push_enabled: req.body?.pushEnabled !== false,
-        p_expiry_hours: expiryHours,
-      },
-    );
-    if (error) throw error;
-    return res.json({ area: Array.isArray(data) ? data[0] : data });
+    const now = new Date().toISOString();
+    const values = {
+      name: "Current location",
+      area_type: "CIRCLE",
+      center: `POINT(${longitude} ${latitude})`,
+      radius_m: radiusM,
+      boundary: null,
+      category_keys: cleanCategories(req.body?.categoryKeys),
+      all_categories: req.body?.allCategories !== false,
+      push_enabled: req.body?.pushEnabled !== false,
+      active: true,
+      source_type: "CURRENT_LOCATION",
+      expires_at:
+        expiryHours === 0
+          ? null
+          : new Date(Date.now() + expiryHours * 3600000).toISOString(),
+      location_updated_at: now,
+      updated_at: now,
+    };
+    const existing = await supaAdmin
+      .from("notification_watch_areas")
+      .select("id")
+      .eq("user_id", req.user.id)
+      .eq("source_type", "CURRENT_LOCATION")
+      .limit(1)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    const result = existing.data?.id
+      ? await supaAdmin
+          .from("notification_watch_areas")
+          .update(values)
+          .eq("id", existing.data.id)
+          .eq("user_id", req.user.id)
+          .select(
+            "id,name,area_type,radius_m,category_keys,all_categories,push_enabled,active,source_type,expires_at,location_updated_at",
+          )
+          .single()
+      : await supaAdmin
+          .from("notification_watch_areas")
+          .insert({ ...values, user_id: req.user.id })
+          .select(
+            "id,name,area_type,radius_m,category_keys,all_categories,push_enabled,active,source_type,expires_at,location_updated_at",
+          )
+          .single();
+    if (result.error) throw result.error;
+    return res.json({ area: result.data });
   } catch (error) {
     console.error("[alert-areas] current location storage failed", {
       message: String(error?.message || error || ""),

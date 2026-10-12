@@ -1114,6 +1114,36 @@ export const en = {
     "The report is now visible in new matches for 30 days.",
   "match.ranked.matches.for.your.case": "Best matches first",
   "cases.reactivation.success.close": "Close",
+  "alertAreas.notifyWhereIAm": "Notify me where I am",
+  "alertAreas.notifyWhereIAmBody":
+    "Uses your position when the app opens. No continuous background tracking.",
+  "alertAreas.currentLocationActive": "Current-location alert is active",
+  "alertAreas.currentLocationOff": "Current-location alert is off",
+  "alertAreas.lastUpdated": "Last updated",
+  "alertAreas.neverUpdated": "Never",
+  "alertAreas.radius": "Radius",
+  "alertAreas.categories": "Categories",
+  "alertAreas.automaticExpiry": "Automatic expiry",
+  "alertAreas.expiryOneDay": "1 day",
+  "alertAreas.expiryThreeDays": "3 days",
+  "alertAreas.expiryOneWeek": "1 week",
+  "alertAreas.expiryUntilOff": "Until I turn it off",
+  "alertAreas.updatePositionNow": "Update position now",
+  "alertAreas.enableCurrentLocation": "Enable current-location alert",
+  "alertAreas.savedAreas": "Saved areas",
+  "alertAreas.manageSavedAreas": "Manage",
+  "alertAreas.locationPrivacy":
+    "Only the latest position is stored. Lost or Found does not track your movement in the background.",
+  "alertAreas.allAreasVisible": "All active areas are shown on the map",
+  "alertAreas.activeArea": "Active",
+  "alertAreas.pausedArea": "Paused",
+  "alertAreas.locationPermissionTitle": "Location access required",
+  "alertAreas.locationPermissionBody":
+    "Allow location access to use current-location alerts.",
+  "alertAreas.locationUpdateFailed":
+    "Could not update your position. Please try again.",
+  "alertAreas.locationDisableFailed":
+    "Could not turn off the current-location alert.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

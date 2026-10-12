@@ -1111,4 +1111,33 @@ export const no: TranslationDictionary = {
     "Rapporten er nå synlig i nye treff i 30 dager.",
   "match.ranked.matches.for.your.case": "Beste treff øverst",
   "cases.reactivation.success.close": "Lukk",
+  "alertAreas.notifyWhereIAm": "Varsle meg der jeg er",
+  "alertAreas.notifyWhereIAmBody":
+    "Bruker posisjonen når appen åpnes. Ingen kontinuerlig bakgrunnssporing.",
+  "alertAreas.currentLocationActive": "Posisjonsvarsel er aktivt",
+  "alertAreas.currentLocationOff": "Posisjonsvarsel er av",
+  "alertAreas.lastUpdated": "Sist oppdatert",
+  "alertAreas.neverUpdated": "Aldri",
+  "alertAreas.radius": "Radius",
+  "alertAreas.categories": "Kategorier",
+  "alertAreas.automaticExpiry": "Automatisk utløp",
+  "alertAreas.expiryOneDay": "1 dag",
+  "alertAreas.expiryThreeDays": "3 dager",
+  "alertAreas.expiryOneWeek": "1 uke",
+  "alertAreas.expiryUntilOff": "Til jeg slår av",
+  "alertAreas.updatePositionNow": "Oppdater posisjon nå",
+  "alertAreas.enableCurrentLocation": "Aktiver posisjonsvarsel",
+  "alertAreas.savedAreas": "Lagrede områder",
+  "alertAreas.manageSavedAreas": "Administrer",
+  "alertAreas.locationPrivacy":
+    "Bare siste posisjon lagres. Lost or Found sporer ikke bevegelsene dine i bakgrunnen.",
+  "alertAreas.allAreasVisible": "Alle aktive områder vises i kartet",
+  "alertAreas.activeArea": "Aktivt",
+  "alertAreas.pausedArea": "På pause",
+  "alertAreas.locationPermissionTitle": "Posisjonstilgang kreves",
+  "alertAreas.locationPermissionBody":
+    "Tillat posisjonstilgang for å bruke posisjonsvarsler.",
+  "alertAreas.locationUpdateFailed":
+    "Kunne ikke oppdatere posisjonen. Prøv igjen.",
+  "alertAreas.locationDisableFailed": "Kunne ikke slå av posisjonsvarselet.",
 };

@@ -8,14 +8,13 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  LayoutChangeEvent,
+  AppState,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import MapView, {
@@ -23,7 +22,6 @@ import MapView, {
   Marker,
   Polygon,
   PROVIDER_GOOGLE,
-  Region,
 } from "react-native-maps";
 import * as Location from "expo-location";
 import { Stack, useRouter } from "expo-router";
@@ -35,11 +33,10 @@ import { supabase } from "../src/lib/supabase";
 import { API_BASE_URL } from "../src/lib/config";
 
 type Point = { latitude: number; longitude: number };
-type AreaMode = "CIRCLE" | "POLYGON";
 type Area = {
   id: string;
   name: string;
-  area_type?: AreaMode;
+  area_type?: "CIRCLE" | "POLYGON";
   latitude: number | null;
   longitude: number | null;
   radius_m: number | null;
@@ -48,9 +45,12 @@ type Area = {
   all_categories: boolean;
   push_enabled: boolean;
   active: boolean;
+  source_type?: "SAVED" | "CURRENT_LOCATION";
+  expires_at?: string | null;
+  location_updated_at?: string | null;
 };
-const DEFAULT_CENTER: Point = { latitude: 59.9139, longitude: 10.7522 };
-const RADII = [250, 500, 1000, 3000, 5000, 10000];
+const RADII = [1000, 3000, 5000, 10000];
+const EXPIRIES = [24, 72, 168, 0];
 const CATEGORIES = [
   "PETS",
   "JEWELRY",
@@ -61,7 +61,7 @@ const CATEGORIES = [
   "SPORTS",
   "TRANSPORT",
 ];
-const CATEGORY_LABEL_KEYS = {
+const LABELS: any = {
   PETS: "alertAreas.category.pets",
   JEWELRY: "alertAreas.category.jewelry",
   ELECTRONICS: "alertAreas.category.electronics",
@@ -70,670 +70,391 @@ const CATEGORY_LABEL_KEYS = {
   CLOTHING: "alertAreas.category.clothing",
   SPORTS: "alertAreas.category.sports",
   TRANSPORT: "alertAreas.category.transport",
-} as const;
-const validPoint = (value: any): value is Point =>
-  Number.isFinite(Number(value?.latitude)) &&
-  Number.isFinite(Number(value?.longitude));
-const circleBounds = (center: Point, radiusMeters: number): Point[] => {
-  const latitudeOffset = radiusMeters / 111_320;
-  const longitudeScale = Math.max(
-    0.15,
-    Math.cos((center.latitude * Math.PI) / 180),
-  );
-  const longitudeOffset = radiusMeters / (111_320 * longitudeScale);
-
+};
+const valid = (p: any) =>
+  Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude));
+const circleBounds = (p: Point, r: number) => {
+  const a = r / 111320,
+    b = r / (111320 * Math.max(0.15, Math.cos((p.latitude * Math.PI) / 180)));
   return [
-    { latitude: center.latitude + latitudeOffset, longitude: center.longitude },
-    { latitude: center.latitude - latitudeOffset, longitude: center.longitude },
-    {
-      latitude: center.latitude,
-      longitude: center.longitude + longitudeOffset,
-    },
-    {
-      latitude: center.latitude,
-      longitude: center.longitude - longitudeOffset,
-    },
+    { latitude: p.latitude + a, longitude: p.longitude },
+    { latitude: p.latitude - a, longitude: p.longitude },
+    { latitude: p.latitude, longitude: p.longitude + b },
+    { latitude: p.latitude, longitude: p.longitude - b },
   ];
 };
-
 export default function AlertAreasScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { language, t } = useI18n();
-  const mapRef = useRef<MapView>(null);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [panelHeight, setPanelHeight] = useState(150);
-  const [name, setName] = useState("");
-  const [center, setCenter] = useState<Point>(DEFAULT_CENTER);
-  const [radius, setRadius] = useState(1000);
-  const [mode, setMode] = useState<AreaMode>("CIRCLE");
-  const [points, setPoints] = useState<Point[]>([]);
-  const [allCategories, setAllCategories] = useState(true);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
-  const selected = areas.find((item) => item.id === selectedId) || null;
-  const region = useMemo<Region>(
-    () => ({ ...DEFAULT_CENTER, latitudeDelta: 0.08, longitudeDelta: 0.08 }),
-    [],
-  );
+  const router = useRouter(),
+    insets = useSafeAreaInsets(),
+    { language, t } = useI18n(),
+    mapRef = useRef<MapView>(null);
+  const [areas, setAreas] = useState<Area[]>([]),
+    [busy, setBusy] = useState(false),
+    [radius, setRadius] = useState(3000),
+    [expiryHours, setExpiryHours] = useState(168),
+    [allCategories, setAllCategories] = useState(true),
+    [categories, setCategories] = useState<string[]>([]);
+  const current =
+    areas.find((x) => x.source_type === "CURRENT_LOCATION") || null;
+  const saved = areas.filter((x) => x.source_type !== "CURRENT_LOCATION");
   const headers = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) throw new Error("LOGIN_REQUIRED");
     return {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     };
   }, []);
-  const friendly = (error: any, fallback: string) => {
-    const code = String(error?.message || error || "");
-    if (code === "LOGIN_REQUIRED") return t("alertAreas.loginRequired");
-    if (code.includes("INVALID_BOUNDARY")) return t("alertAreas.invalidArea");
-    return fallback;
-  };
+  const fitAll = useCallback(
+    (list: Area[]) => {
+      const points: Point[] = [];
+      for (const a of list) {
+        if (!a.active) continue;
+        if (a.area_type === "POLYGON")
+          points.push(...(a.boundary_points || []).filter(valid));
+        else if (valid({ latitude: a.latitude, longitude: a.longitude }))
+          points.push(
+            ...circleBounds(
+              { latitude: Number(a.latitude), longitude: Number(a.longitude) },
+              a.radius_m || 1000,
+            ),
+          );
+      }
+      if (points.length)
+        setTimeout(
+          () =>
+            mapRef.current?.fitToCoordinates(points, {
+              edgePadding: {
+                top: insets.top + 125,
+                right: 45,
+                bottom: 430,
+                left: 45,
+              },
+              animated: true,
+            }),
+          120,
+        );
+    },
+    [insets.top],
+  );
   const load = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/alert-areas`, {
+      const r = await fetch(`${API_BASE_URL}/alert-areas`, {
         headers: await headers(),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setAreas(data.areas || []);
-    } catch (error: any) {
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      const list = j.areas || [];
+      setAreas(list);
+      fitAll(list);
+    } catch (e: any) {
       Alert.alert(
         t("alertAreas.error"),
-        friendly(error, t("alertAreas.loadFailed")),
+        e?.message === "LOGIN_REQUIRED"
+          ? t("alertAreas.loginRequired")
+          : t("alertAreas.loadFailed"),
       );
     }
-  }, [headers, t]);
+  }, [headers, fitAll, t]);
   useEffect(() => {
     void load();
   }, [load]);
-  const onPanelLayout = (event: LayoutChangeEvent) =>
-    setPanelHeight(Math.round(event.nativeEvent.layout.height));
-  const fitArea = useCallback(
-    (item: Area, bottomPadding = panelHeight + 24) => {
-      const edgePadding = {
-        top: insets.top + 135,
-        right: 38,
-        bottom: bottomPadding,
-        left: 38,
-      };
-      const polygon = (item.boundary_points || []).filter(validPoint);
-
-      if (item.area_type === "POLYGON" && polygon.length >= 3) {
-        mapRef.current?.fitToCoordinates(polygon, {
-          edgePadding,
-          animated: true,
+  const updateCurrent = useCallback(
+    async (silent = false) => {
+      try {
+        setBusy(true);
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          if (!silent)
+            Alert.alert(
+              t("alertAreas.locationPermissionTitle"),
+              t("alertAreas.locationPermissionBody"),
+            );
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
         });
-        return;
+        const r = await fetch(`${API_BASE_URL}/alert-areas/current-location`, {
+          method: "PUT",
+          headers: await headers(),
+          body: JSON.stringify({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            radiusM: radius,
+            expiryHours,
+            allCategories,
+            categoryKeys: categories,
+            pushEnabled: true,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        await load();
+      } catch (e: any) {
+        if (!silent)
+          Alert.alert(
+            t("alertAreas.error"),
+            t("alertAreas.locationUpdateFailed"),
+          );
+      } finally {
+        setBusy(false);
       }
-
-      const circleCenter = validPoint({
-        latitude: item.latitude,
-        longitude: item.longitude,
-      })
-        ? {
-            latitude: Number(item.latitude),
-            longitude: Number(item.longitude),
-          }
-        : DEFAULT_CENTER;
-
-      mapRef.current?.fitToCoordinates(
-        circleBounds(circleCenter, item.radius_m || 1000),
-        { edgePadding, animated: true },
-      );
     },
-    [insets.top, panelHeight],
+    [radius, expiryHours, allCategories, categories, headers, load, t],
   );
-  const selectArea = (item: Area) => {
-    setSelectedId(item.id);
-    setEditorOpen(false);
-    setTimeout(() => fitArea(item, 170), 50);
-  };
-  const applyAreaToEditor = (item: Area) => {
-    const polygon = (item.boundary_points || []).filter(validPoint);
-    setSelectedId(item.id);
-    setName(item.name);
-    setMode(item.area_type === "POLYGON" ? "POLYGON" : "CIRCLE");
-    setCenter(
-      validPoint({ latitude: item.latitude, longitude: item.longitude })
-        ? { latitude: Number(item.latitude), longitude: Number(item.longitude) }
-        : polygon[0] || DEFAULT_CENTER,
-    );
-    setRadius(item.radius_m || 1000);
-    setPoints(polygon);
-    setAllCategories(item.all_categories);
-    setCategories(item.category_keys || []);
-    setEditorOpen(true);
-    setTimeout(() => fitArea(item, 330), 80);
-  };
-  const newArea = () => {
-    setSelectedId(null);
-    setName("");
-    setMode("CIRCLE");
-    setCenter(DEFAULT_CENTER);
-    setRadius(1000);
-    setPoints([]);
-    setAllCategories(true);
-    setCategories([]);
-    setEditorOpen(true);
-  };
-  const closeEditor = () => {
-    setEditorOpen(false);
-    if (selected) setTimeout(() => fitArea(selected, 170), 50);
-  };
-  const locate = async () => {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (permission.status !== "granted") return;
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+  useEffect(() => {
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active" && current?.active) void updateCurrent(true);
     });
-    const next = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
-    setCenter(next);
-    setPoints([]);
-    mapRef.current?.animateToRegion(
-      { ...next, latitudeDelta: 0.03, longitudeDelta: 0.03 },
-      250,
-    );
-  };
-  const search = async () => {
-    const value = query.trim();
-    if (value.length < 3) return;
-    try {
-      setSearching(true);
-      const response = await fetch(
-        `${API_BASE_URL}/geo/search?q=${encodeURIComponent(value)}&language=${encodeURIComponent(language)}`,
-        { headers: await headers() },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setResults(data.results || []);
-    } catch (error: any) {
-      Alert.alert(
-        t("alertAreas.error"),
-        friendly(error, t("alertAreas.searchFailed")),
-      );
-    } finally {
-      setSearching(false);
-    }
-  };
-  const chooseResult = (item: any) => {
-    const next = {
-      latitude: Number(item.latitude),
-      longitude: Number(item.longitude),
-    };
-    if (!validPoint(next)) return;
-    setCenter(next);
-    setPoints([]);
-    setQuery(String(item.label || ""));
-    setResults([]);
-    mapRef.current?.animateToRegion(
-      { ...next, latitudeDelta: 0.02, longitudeDelta: 0.02 },
-      250,
-    );
-  };
-  const mapPress = (point: Point) => {
-    if (!editorOpen) return;
-    if (mode === "CIRCLE") setCenter(point);
-    else setPoints((current) => [...current, point]);
-  };
-  const toggleCategory = (key: string) => {
-    setAllCategories(false);
-    setCategories((current) =>
-      current.includes(key)
-        ? current.filter((item) => item !== key)
-        : [...current, key],
-    );
-  };
-  const save = async () => {
-    if (!selectedId && areas.length >= 3)
-      return Alert.alert(
-        t("alertAreas.maximumReached"),
-        t("alertAreas.maximumReachedBody"),
-      );
-    if (!name.trim()) return Alert.alert(t("alertAreas.nameRequired"));
-    if (mode === "POLYGON" && points.length < 3)
-      return Alert.alert(
-        t("alertAreas.morePointsTitle"),
-        t("alertAreas.morePointsBody"),
-      );
+    return () => listener.remove();
+  }, [current?.active, updateCurrent]);
+  const disableCurrent = async () => {
     try {
       setBusy(true);
-      const body: any = {
-        name: name.trim(),
-        areaType: mode,
-        allCategories,
-        categoryKeys: categories,
-        pushEnabled: true,
-      };
-      if (mode === "CIRCLE")
-        Object.assign(body, {
-          latitude: center.latitude,
-          longitude: center.longitude,
-          radiusM: radius,
-        });
-      else body.boundaryPoints = points;
-      const response = await fetch(
-        `${API_BASE_URL}/alert-areas${selectedId ? `/${selectedId}` : ""}`,
-        {
-          method: selectedId ? "PATCH" : "POST",
-          headers: await headers(),
-          body: JSON.stringify(body),
-        },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      const r = await fetch(`${API_BASE_URL}/alert-areas/current-location`, {
+        method: "DELETE",
+        headers: await headers(),
+      });
+      if (!r.ok) throw new Error("DISABLE_FAILED");
       await load();
-      setEditorOpen(false);
-      setSelectedId(data.area?.id || selectedId);
-      setTimeout(() => {
-        const refreshed = data.area as Area | undefined;
-        if (refreshed) fitArea(refreshed, 170);
-      }, 80);
-    } catch (error: any) {
-      Alert.alert(
-        t("alertAreas.error"),
-        friendly(error, t("alertAreas.saveFailed")),
-      );
+    } catch {
+      Alert.alert(t("alertAreas.error"), t("alertAreas.locationDisableFailed"));
     } finally {
       setBusy(false);
     }
   };
-  const patchStatus = async (id: string, patch: any) => {
-    const response = await fetch(`${API_BASE_URL}/alert-areas/${id}`, {
-      method: "PATCH",
-      headers: await headers(),
-      body: JSON.stringify(patch),
-    });
-    if (!response.ok) throw new Error("WATCH_AREA_UPDATE_FAILED");
-    await load();
+  const toggleCategory = (key: string) => {
+    setAllCategories(false);
+    setCategories((v) =>
+      v.includes(key) ? v.filter((x) => x !== key) : [...v, key],
+    );
   };
-  const remove = async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/alert-areas/${id}`, {
-      method: "DELETE",
-      headers: await headers(),
-    });
-    if (!response.ok) throw new Error("WATCH_AREA_DELETE_FAILED");
-    if (selectedId === id) setSelectedId(null);
-    await load();
-  };
-  const areaMeta = (item: Area) =>
-    item.area_type === "POLYGON"
-      ? t("alertAreas.polygonType", {
-          count: item.boundary_points?.length || 0,
+  const formatUpdated = (iso?: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString(language === "en" ? "en-GB" : "nb-NO", {
+          dateStyle: "short",
+          timeStyle: "short",
         })
-      : t("alertAreas.circleType", {
-          radius:
-            (item.radius_m || 0) >= 1000
-              ? `${(item.radius_m || 0) / 1000} km`
-              : `${item.radius_m || 0} m`,
-        });
+      : t("alertAreas.neverUpdated");
+  const expiryLabel = (h: number) =>
+    h === 24
+      ? t("alertAreas.expiryOneDay")
+      : h === 72
+        ? t("alertAreas.expiryThreeDays")
+        : h === 168
+          ? t("alertAreas.expiryOneWeek")
+          : t("alertAreas.expiryUntilOff");
+  const renderArea = (a: Area, index: number) => {
+    const isCurrent = a.source_type === "CURRENT_LOCATION",
+      stroke = isCurrent
+        ? "#16A34A"
+        : ["#2563EB", "#7C3AED", "#EA580C"][index % 3];
+    if (a.area_type === "POLYGON" && (a.boundary_points || []).length >= 3)
+      return (
+        <Polygon
+          key={a.id}
+          coordinates={a.boundary_points!}
+          strokeColor={stroke}
+          fillColor={isCurrent ? "rgba(22,163,74,.16)" : `${stroke}24`}
+          strokeWidth={3}
+        />
+      );
+    if (!valid({ latitude: a.latitude, longitude: a.longitude })) return null;
+    const p = { latitude: Number(a.latitude), longitude: Number(a.longitude) };
+    return (
+      <React.Fragment key={a.id}>
+        <Circle
+          center={p}
+          radius={a.radius_m || 1000}
+          strokeColor={stroke}
+          fillColor={isCurrent ? "rgba(22,163,74,.16)" : `${stroke}20`}
+          strokeWidth={3}
+        />
+        <Marker coordinate={p} pinColor={stroke} />
+      </React.Fragment>
+    );
+  };
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.safe}>
+      <View style={s.safe}>
         <MapView
           ref={mapRef}
           provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-          style={styles.map}
-          initialRegion={region}
-          onPress={(event) => mapPress(event.nativeEvent.coordinate)}
+          style={s.map}
+          initialRegion={{
+            latitude: 59.9139,
+            longitude: 10.7522,
+            latitudeDelta: 0.1,
+            longitudeDelta: 0.1,
+          }}
         >
-          {editorOpen ? (
-            mode === "CIRCLE" ? (
-              <>
-                <Marker
-                  coordinate={center}
-                  draggable
-                  onDragEnd={(event) => setCenter(event.nativeEvent.coordinate)}
-                />
-                <Circle
-                  center={center}
-                  radius={radius}
-                  strokeColor="#2563EB"
-                  fillColor="rgba(37,99,235,.15)"
-                />
-              </>
-            ) : (
-              <>
-                {points.map((point, index) => (
-                  <Marker
-                    key={`${point.latitude}-${point.longitude}-${index}`}
-                    coordinate={point}
-                    pinColor="#F59E0B"
-                  />
-                ))}
-                {points.length >= 3 && (
-                  <Polygon
-                    coordinates={points}
-                    strokeColor="#2563EB"
-                    fillColor="rgba(37,99,235,.18)"
-                    strokeWidth={3}
-                  />
-                )}
-              </>
-            )
-          ) : selected ? (
-            selected.area_type === "POLYGON" &&
-            selected.boundary_points &&
-            selected.boundary_points.length >= 3 ? (
-              <Polygon
-                coordinates={selected.boundary_points}
-                strokeColor="#2563EB"
-                fillColor="rgba(37,99,235,.18)"
-                strokeWidth={3}
-              />
-            ) : validPoint({
-                latitude: selected.latitude,
-                longitude: selected.longitude,
-              }) ? (
-              <>
-                <Marker
-                  coordinate={{
-                    latitude: Number(selected.latitude),
-                    longitude: Number(selected.longitude),
-                  }}
-                />
-                <Circle
-                  center={{
-                    latitude: Number(selected.latitude),
-                    longitude: Number(selected.longitude),
-                  }}
-                  radius={selected.radius_m || 1000}
-                  strokeColor="#2563EB"
-                  fillColor="rgba(37,99,235,.15)"
-                />
-              </>
-            ) : null
-          ) : null}
+          {areas.filter((x) => x.active).map(renderArea)}
         </MapView>
-        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
+        <View style={[s.header, { paddingTop: insets.top + 4 }]}>
+          <Pressable onPress={() => router.back()} style={s.round}>
+            <Ionicons name="chevron-back" size={25} />
           </Pressable>
-          <Text style={styles.headerTitle}>{t("alertAreas.title")}</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={[styles.searchBox, { top: insets.top + 58 }]}>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={() => void search()}
-              returnKeyType="search"
-              placeholder={t("alertAreas.searchPlaceholder")}
-            />
-            <Pressable
-              style={styles.searchButton}
-              onPress={() => void search()}
-            >
-              {searching ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.searchButtonText}>
-                  {t("alertAreas.search")}
-                </Text>
-              )}
-            </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>{t("alertAreas.title")}</Text>
+            <Text style={s.headerSub}>{t("alertAreas.allAreasVisible")}</Text>
           </View>
-          {results.length > 0 && (
-            <View style={styles.results}>
-              {results.map((item) => (
+          <Pressable onPress={() => fitAll(areas)} style={s.round}>
+            <Ionicons name="scan-outline" size={22} />
+          </Pressable>
+        </View>
+        <View style={[s.panel, { bottom: Math.max(10, insets.bottom + 5) }]}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 4 }}
+          >
+            <View style={s.sectionTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.h2}>{t("alertAreas.notifyWhereIAm")}</Text>
+                <Text style={s.help}>{t("alertAreas.notifyWhereIAmBody")}</Text>
+              </View>
+              <Switch
+                value={!!current?.active}
+                disabled={busy}
+                onValueChange={(v) =>
+                  v ? void updateCurrent(false) : void disableCurrent()
+                }
+              />
+            </View>
+            <View style={s.statusBox}>
+              <Ionicons name="locate" size={20} color="#15803D" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.statusTitle}>
+                  {current?.active
+                    ? t("alertAreas.currentLocationActive")
+                    : t("alertAreas.currentLocationOff")}
+                </Text>
+                <Text style={s.statusMeta}>
+                  {t("alertAreas.lastUpdated")}:{" "}
+                  {formatUpdated(current?.location_updated_at)}
+                </Text>
+              </View>
+            </View>
+            <Text style={s.label}>{t("alertAreas.radius")}</Text>
+            <View style={s.chips}>
+              {RADII.map((v) => (
                 <Pressable
-                  key={item.id || item.label}
-                  style={styles.result}
-                  onPress={() => chooseResult(item)}
+                  key={v}
+                  onPress={() => setRadius(v)}
+                  style={[s.chip, radius === v && s.chipOn]}
                 >
-                  <Text numberOfLines={2}>{item.label}</Text>
+                  <Text style={[s.chipText, radius === v && s.chipTextOn]}>
+                    {v / 1000} km
+                  </Text>
                 </Pressable>
               ))}
             </View>
-          )}
-        </View>
-        {editorOpen ? (
-          <View
-            onLayout={onPanelLayout}
-            style={[
-              styles.editorPanel,
-              { bottom: Math.max(10, insets.bottom + 6) },
-            ]}
-          >
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+            <Text style={s.label}>{t("alertAreas.categories")}</Text>
+            <Pressable
+              onPress={() => {
+                setAllCategories(true);
+                setCategories([]);
+              }}
+              style={[s.chip, s.allChip, allCategories && s.chipOn]}
             >
-              <View style={styles.editorHeader}>
-                <Text style={styles.editorTitle}>
-                  {selectedId
-                    ? t("alertAreas.editing")
-                    : t("alertAreas.newArea")}
-                </Text>
-                <Pressable onPress={closeEditor}>
-                  <Text style={styles.link}>{t("alertAreas.hideEditor")}</Text>
-                </Pressable>
-              </View>
-              <View style={styles.modeRow}>
-                {(["CIRCLE", "POLYGON"] as AreaMode[]).map((value) => (
-                  <Pressable
-                    key={value}
-                    onPress={() => {
-                      setMode(value);
-                      setPoints([]);
-                    }}
-                    style={[styles.mode, mode === value && styles.modeOn]}
-                  >
-                    <Text
-                      style={[
-                        styles.modeText,
-                        mode === value && styles.modeTextOn,
-                      ]}
-                    >
-                      {value === "CIRCLE"
-                        ? t("alertAreas.place")
-                        : t("alertAreas.area")}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.help}>
-                {mode === "CIRCLE"
-                  ? t("alertAreas.tapPlace")
-                  : t("alertAreas.tapPolygon")}
+              <Text style={[s.chipText, allCategories && s.chipTextOn]}>
+                {t("alertAreas.allCategories")}
               </Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder={t("alertAreas.namePlaceholder")}
-                style={styles.input}
-              />
-              {mode === "CIRCLE" ? (
-                <View style={styles.row}>
-                  {RADII.map((value) => (
-                    <Pressable
-                      key={value}
-                      onPress={() => setRadius(value)}
-                      style={[styles.chip, radius === value && styles.chipOn]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          radius === value && styles.chipTextOn,
-                        ]}
-                      >
-                        {value >= 1000 ? `${value / 1000} km` : `${value} m`}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+            </Pressable>
+            <View style={s.chips}>
+              {CATEGORIES.map((k) => (
+                <Pressable
+                  key={k}
+                  onPress={() => toggleCategory(k)}
+                  style={[s.chip, categories.includes(k) && s.chipOn]}
+                >
+                  <Text
+                    style={[s.chipText, categories.includes(k) && s.chipTextOn]}
+                  >
+                    {t(LABELS[k])}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={s.label}>{t("alertAreas.automaticExpiry")}</Text>
+            <View style={s.chips}>
+              {EXPIRIES.map((v) => (
+                <Pressable
+                  key={v}
+                  onPress={() => setExpiryHours(v)}
+                  style={[s.chip, expiryHours === v && s.chipOn]}
+                >
+                  <Text style={[s.chipText, expiryHours === v && s.chipTextOn]}>
+                    {expiryLabel(v)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              disabled={busy}
+              onPress={() => void updateCurrent(false)}
+              style={[s.primary, busy && { opacity: 0.5 }]}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
               ) : (
-                <View style={styles.geometryActions}>
-                  <Text style={styles.count}>
-                    {t("alertAreas.pointCount", { count: points.length })}
-                  </Text>
-                  <Pressable
-                    onPress={() => setPoints((current) => current.slice(0, -1))}
-                  >
-                    <Text style={styles.link}>{t("alertAreas.undo")}</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setPoints([])}>
-                    <Text style={styles.delete}>{t("alertAreas.clear")}</Text>
-                  </Pressable>
-                </View>
+                <Text style={s.primaryText}>
+                  {current?.active
+                    ? t("alertAreas.updatePositionNow")
+                    : t("alertAreas.enableCurrentLocation")}
+                </Text>
               )}
-              <Pressable
-                onPress={() => {
-                  setAllCategories(true);
-                  setCategories([]);
-                }}
-                style={[styles.all, allCategories && styles.chipOn]}
-              >
-                <Text
-                  style={[styles.chipText, allCategories && styles.chipTextOn]}
-                >
-                  {t("alertAreas.allCategories")}
-                </Text>
-              </Pressable>
-              <View style={styles.row}>
-                {CATEGORIES.map((key) => (
-                  <Pressable
-                    key={key}
-                    onPress={() => toggleCategory(key)}
-                    style={[
-                      styles.chip,
-                      categories.includes(key) && styles.chipOn,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        categories.includes(key) && styles.chipTextOn,
-                      ]}
-                    >
-                      {t(
-                        CATEGORY_LABEL_KEYS[
-                          key as keyof typeof CATEGORY_LABEL_KEYS
-                        ],
-                      )}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <View style={styles.actions}>
-                <Pressable
-                  style={styles.secondary}
-                  onPress={() => void locate()}
-                >
-                  <Text style={styles.secondaryText}>
-                    {t("alertAreas.myLocation")}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  disabled={busy}
-                  style={[styles.primary, busy && styles.disabled]}
-                  onPress={() => void save()}
-                >
-                  {busy ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryText}>
-                      {selectedId
-                        ? t("alertAreas.saveChanges")
-                        : t("alertAreas.saveArea")}
-                    </Text>
-                  )}
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
-        ) : (
-          <View
-            onLayout={onPanelLayout}
-            style={[
-              styles.compactPanel,
-              { bottom: Math.max(10, insets.bottom + 6) },
-            ]}
-          >
-            <View style={styles.compactHeader}>
+            </Pressable>
+            <View style={s.divider} />
+            <View style={s.savedHeader}>
               <View>
-                <Text style={styles.compactTitle}>
-                  {t("alertAreas.myAreas")}
-                </Text>
-                <Text style={styles.compactMeta}>{areas.length} / 3</Text>
+                <Text style={s.h2}>{t("alertAreas.savedAreas")}</Text>
+                <Text style={s.help}>{saved.length} / 3</Text>
               </View>
-              <Pressable onPress={newArea} style={styles.newButton}>
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={styles.newButtonText}>
-                  {t("alertAreas.newArea")}
+              <Pressable
+                onPress={() => router.push("/alert-area-editor" as any)}
+                style={s.secondary}
+              >
+                <Text style={s.secondaryText}>
+                  {t("alertAreas.manageSavedAreas")}
                 </Text>
               </Pressable>
             </View>
-            {selected && (
-              <View style={styles.selectedRow}>
-                <View style={styles.selectedText}>
-                  <Text style={styles.cardTitle}>{selected.name}</Text>
-                  <Text style={styles.cardMeta}>{areaMeta(selected)}</Text>
-                </View>
-                <Pressable onPress={() => applyAreaToEditor(selected)}>
-                  <Text style={styles.link}>{t("alertAreas.edit")}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    void patchStatus(selected.id, { active: !selected.active })
-                  }
-                >
-                  <Text style={styles.link}>
-                    {selected.active
-                      ? t("alertAreas.pause")
-                      : t("alertAreas.activate")}
-                  </Text>
-                </Pressable>
-                <Pressable onPress={() => void remove(selected.id)}>
-                  <Text style={styles.delete}>{t("alertAreas.delete")}</Text>
-                </Pressable>
-              </View>
-            )}
-            <FlatList
-              data={areas}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => selectArea(item)}
+            {saved.map((a, i) => (
+              <View key={a.id} style={s.savedRow}>
+                <View
                   style={[
-                    styles.areaChip,
-                    selectedId === item.id && styles.areaChipSelected,
+                    s.dot,
+                    {
+                      backgroundColor: ["#2563EB", "#7C3AED", "#EA580C"][i % 3],
+                    },
                   ]}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.areaChipText,
-                      selectedId === item.id && styles.areaChipTextSelected,
-                    ]}
-                  >
-                    {item.name}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.savedTitle}>{a.name}</Text>
+                  <Text style={s.statusMeta}>
+                    {a.active
+                      ? t("alertAreas.activeArea")
+                      : t("alertAreas.pausedArea")}{" "}
+                    ·{" "}
+                    {a.all_categories
+                      ? t("alertAreas.allCategories")
+                      : t("alertAreas.categoryCount", {
+                          count: a.category_keys?.length || 0,
+                        })}
                   </Text>
-                </Pressable>
-              )}
-            />
-          </View>
-        )}
+                </View>
+              </View>
+            ))}
+            <Text style={s.privacy}>{t("alertAreas.locationPrivacy")}</Text>
+          </ScrollView>
+        </View>
       </View>
     </>
   );
 }
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   map: { flex: 1 },
   header: {
@@ -741,17 +462,18 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 60,
-    minHeight: 56,
-    backgroundColor: "rgba(255,255,255,.98)",
+    zIndex: 20,
+    minHeight: 64,
     paddingHorizontal: 10,
-    paddingBottom: 7,
+    paddingBottom: 8,
+    backgroundColor: "rgba(255,255,255,.97)",
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  backButton: {
+  round: {
     width: 42,
     height: 42,
     borderRadius: 21,
@@ -759,204 +481,119 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "900",
-    color: theme.colors.text,
+  headerTitle: { fontSize: 18, fontWeight: "900", color: theme.colors.text },
+  headerSub: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: theme.colors.muted,
+    marginTop: 2,
   },
-  headerSpacer: { width: 42 },
-  searchBox: {
+  panel: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    zIndex: 50,
+    left: 10,
+    right: 10,
+    zIndex: 30,
+    maxHeight: "58%",
+    padding: 14,
+    borderRadius: 20,
     backgroundColor: "rgba(255,255,255,.98)",
-    borderRadius: 14,
-    padding: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  searchRow: { flexDirection: "row", gap: 8 },
-  searchInput: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 12,
-  },
-  searchButton: {
-    minWidth: 62,
-    minHeight: 42,
-    borderRadius: 10,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  searchButtonText: { color: "#fff", fontWeight: "900" },
-  results: { marginTop: 6 },
-  result: {
-    padding: 9,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  compactPanel: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    zIndex: 40,
-    backgroundColor: "rgba(255,255,255,.98)",
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  compactHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  compactTitle: { fontWeight: "900", fontSize: 16, color: theme.colors.text },
-  compactMeta: { fontSize: 11, fontWeight: "800", color: theme.colors.muted },
-  newButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 11,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  newButtonText: { color: "#fff", fontWeight: "900" },
-  selectedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  selectedText: { flex: 1 },
-  areaChip: {
-    maxWidth: 130,
-    marginTop: 9,
-    marginRight: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  areaChipSelected: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  areaChipText: { fontWeight: "800", color: theme.colors.text },
-  areaChipTextSelected: { color: "#fff" },
-  editorPanel: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    zIndex: 40,
-    maxHeight: "46%",
-    backgroundColor: "rgba(255,255,255,.98)",
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  editorHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  editorTitle: { fontWeight: "900", fontSize: 15, color: theme.colors.text },
-  modeRow: { flexDirection: "row", gap: 8 },
-  mode: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modeOn: { backgroundColor: theme.colors.primary },
-  modeText: { fontWeight: "900", color: theme.colors.muted },
-  modeTextOn: { color: "#fff" },
+  sectionTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  h2: { fontSize: 16, fontWeight: "900", color: theme.colors.text },
   help: {
-    marginTop: 7,
+    marginTop: 3,
     color: theme.colors.muted,
     fontWeight: "700",
     fontSize: 12,
+    lineHeight: 17,
   },
-  input: {
+  statusBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    padding: 11,
+    borderColor: "#BBF7D0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  statusTitle: { fontWeight: "900", color: "#166534" },
+  statusMeta: {
+    marginTop: 2,
+    color: theme.colors.muted,
+    fontWeight: "700",
+    fontSize: 11,
+  },
+  label: {
+    marginTop: 14,
+    marginBottom: 6,
+    fontWeight: "900",
+    fontSize: 12,
     color: theme.colors.text,
-    marginTop: 8,
   },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#F1F5F9",
-  },
-  chipOn: { backgroundColor: theme.colors.primary },
-  chipText: { fontSize: 11, fontWeight: "800", color: "#475569" },
-  chipTextOn: { color: "#fff" },
-  all: {
-    alignSelf: "flex-start",
-    marginTop: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: "#F1F5F9",
-  },
-  geometryActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
-    marginTop: 9,
-  },
-  actions: { flexDirection: "row", gap: 8, marginTop: 10 },
-  secondary: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  secondaryText: { fontWeight: "900", color: theme.colors.text },
+  allChip: { alignSelf: "flex-start", marginBottom: 6 },
+  chipOn: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipText: { fontSize: 11, fontWeight: "800", color: "#475569" },
+  chipTextOn: { color: "#fff" },
   primary: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
+    marginTop: 15,
+    minHeight: 48,
+    borderRadius: 14,
     backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryText: { fontWeight: "900", color: "#fff" },
-  disabled: { opacity: 0.45 },
-  count: { marginTop: 8, color: theme.colors.muted, fontWeight: "900" },
-  cardTitle: { fontWeight: "900", color: theme.colors.text },
-  cardMeta: {
-    marginTop: 2,
-    fontSize: 11,
-    fontWeight: "700",
-    color: theme.colors.muted,
+  primaryText: { color: "#fff", fontWeight: "900", textAlign: "center" },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: 16,
   },
-  link: { color: theme.colors.primary, fontWeight: "900" },
-  delete: { color: theme.colors.danger, fontWeight: "900" },
+  savedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  secondary: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  secondaryText: { fontWeight: "900", color: theme.colors.primary },
+  savedRow: {
+    marginTop: 9,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dot: { width: 11, height: 11, borderRadius: 6 },
+  savedTitle: { fontWeight: "900", color: theme.colors.text },
+  privacy: {
+    marginTop: 15,
+    color: theme.colors.muted,
+    fontWeight: "700",
+    fontSize: 11,
+    lineHeight: 16,
+  },
 });

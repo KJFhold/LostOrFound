@@ -1140,4 +1140,13 @@ export const no: TranslationDictionary = {
   "alertAreas.locationUpdateFailed":
     "Kunne ikke oppdatere posisjonen. Prøv igjen.",
   "alertAreas.locationDisableFailed": "Kunne ikke slå av posisjonsvarselet.",
+  "alertAreas.showAllAreas": "Vis alle områder",
+  "alertAreas.collapsePanel": "Skjul innstillinger",
+  "alertAreas.expandPanel": "Vis innstillinger",
+  "alertAreas.locationReadFailed":
+    "Kunne ikke hente posisjonen din. Kontroller posisjonstilgangen og prøv igjen.",
+  "alertAreas.locationStorageFailed":
+    "Posisjonen ble funnet, men varslingsområdet kunne ikke lagres. Prøv igjen.",
+  "alertAreas.locationServiceFailed":
+    "Tjenesten for posisjonsvarsler er ikke tilgjengelig akkurat nå. Prøv igjen.",
 };

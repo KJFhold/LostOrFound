@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  LayoutChangeEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -90,6 +91,8 @@ export default function AlertAreasScreen() {
     mapRef = useRef<MapView>(null);
   const [areas, setAreas] = useState<Area[]>([]),
     [busy, setBusy] = useState(false),
+    [panelHeight, setPanelHeight] = useState(360),
+    [panelCollapsed, setPanelCollapsed] = useState(false),
     [radius, setRadius] = useState(3000),
     [expiryHours, setExpiryHours] = useState(168),
     [allCategories, setAllCategories] = useState(true),
@@ -146,6 +149,32 @@ export default function AlertAreasScreen() {
       if (!r.ok) throw new Error(j.error);
       const list = j.areas || [];
       setAreas(list);
+      const currentArea = list.find(
+        (item: Area) => item.source_type === "CURRENT_LOCATION",
+      );
+      if (currentArea) {
+        setRadius(Number(currentArea.radius_m || 3000));
+        setAllCategories(currentArea.all_categories !== false);
+        setCategories(currentArea.category_keys || []);
+        const remainingHours = currentArea.expires_at
+          ? Math.max(
+              1,
+              Math.round(
+                (new Date(currentArea.expires_at).getTime() - Date.now()) /
+                  3600000,
+              ),
+            )
+          : 0;
+        setExpiryHours(
+          remainingHours === 0
+            ? 0
+            : remainingHours <= 24
+              ? 24
+              : remainingHours <= 72
+                ? 72
+                : 168,
+        );
+      }
       fitAll(list);
     } catch (e: any) {
       Alert.alert(
@@ -188,15 +217,30 @@ export default function AlertAreasScreen() {
             pushEnabled: true,
           }),
         });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error);
+        const responseText = await r.text();
+        let responseData: any = {};
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          responseData = {};
+        }
+        if (!r.ok) throw new Error(responseData.error || `HTTP_${r.status}`);
         await load();
       } catch (e: any) {
-        if (!silent)
-          Alert.alert(
-            t("alertAreas.error"),
-            t("alertAreas.locationUpdateFailed"),
-          );
+        const code = String(e?.message || "");
+        console.warn("[alert-areas] current location update failed", code);
+        if (!silent) {
+          const message =
+            code === "CURRENT_LOCATION_STORAGE_FAILED"
+              ? t("alertAreas.locationStorageFailed")
+              : code === "LOGIN_REQUIRED" || code === "HTTP_401"
+                ? t("alertAreas.loginRequired")
+                : code.startsWith("HTTP_") ||
+                    code === "CURRENT_LOCATION_UPDATE_FAILED"
+                  ? t("alertAreas.locationServiceFailed")
+                  : t("alertAreas.locationReadFailed");
+          Alert.alert(t("alertAreas.error"), message);
+        }
       } finally {
         setBusy(false);
       }
@@ -223,6 +267,10 @@ export default function AlertAreasScreen() {
     } finally {
       setBusy(false);
     }
+  };
+  const onPanelLayout = (event: LayoutChangeEvent) => {
+    if (!panelCollapsed)
+      setPanelHeight(Math.ceil(event.nativeEvent.layout.height));
   };
   const toggleCategory = (key: string) => {
     setAllCategories(false);
@@ -300,12 +348,42 @@ export default function AlertAreasScreen() {
             <Text style={s.headerTitle}>{t("alertAreas.title")}</Text>
             <Text style={s.headerSub}>{t("alertAreas.allAreasVisible")}</Text>
           </View>
-          <Pressable onPress={() => fitAll(areas)} style={s.round}>
-            <Ionicons name="scan-outline" size={22} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("alertAreas.showAllAreas")}
+            onPress={() => fitAll(areas)}
+            style={s.round}
+          >
+            <Ionicons name="map-outline" size={22} color={theme.colors.text} />
           </Pressable>
         </View>
-        <View style={[s.panel, { bottom: Math.max(10, insets.bottom + 5) }]}>
+        <View
+          onLayout={onPanelLayout}
+          style={[
+            s.panel,
+            panelCollapsed && s.panelCollapsed,
+            { bottom: Math.max(10, insets.bottom + 5) },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              panelCollapsed
+                ? t("alertAreas.expandPanel")
+                : t("alertAreas.collapsePanel")
+            }
+            onPress={() => setPanelCollapsed((value) => !value)}
+            style={s.panelHandleRow}
+          >
+            <View style={s.panelHandle} />
+            <Ionicons
+              name={panelCollapsed ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={theme.colors.muted}
+            />
+          </Pressable>
           <ScrollView
+            scrollEnabled={!panelCollapsed}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 4 }}
           >
@@ -313,6 +391,11 @@ export default function AlertAreasScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.h2}>{t("alertAreas.notifyWhereIAm")}</Text>
                 <Text style={s.help}>{t("alertAreas.notifyWhereIAmBody")}</Text>
+                {panelCollapsed && (
+                  <Text style={s.collapsedMeta}>
+                    {t("alertAreas.savedAreas")}: {saved.length}
+                  </Text>
+                )}
               </View>
               <Switch
                 value={!!current?.active}
@@ -322,132 +405,160 @@ export default function AlertAreasScreen() {
                 }
               />
             </View>
-            <View style={s.statusBox}>
-              <Ionicons name="locate" size={20} color="#15803D" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.statusTitle}>
-                  {current?.active
-                    ? t("alertAreas.currentLocationActive")
-                    : t("alertAreas.currentLocationOff")}
-                </Text>
-                <Text style={s.statusMeta}>
-                  {t("alertAreas.lastUpdated")}:{" "}
-                  {formatUpdated(current?.location_updated_at)}
-                </Text>
-              </View>
-            </View>
-            <Text style={s.label}>{t("alertAreas.radius")}</Text>
-            <View style={s.chips}>
-              {RADII.map((v) => (
-                <Pressable
-                  key={v}
-                  onPress={() => setRadius(v)}
-                  style={[s.chip, radius === v && s.chipOn]}
-                >
-                  <Text style={[s.chipText, radius === v && s.chipTextOn]}>
-                    {v / 1000} km
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={s.label}>{t("alertAreas.categories")}</Text>
-            <Pressable
-              onPress={() => {
-                setAllCategories(true);
-                setCategories([]);
-              }}
-              style={[s.chip, s.allChip, allCategories && s.chipOn]}
-            >
-              <Text style={[s.chipText, allCategories && s.chipTextOn]}>
-                {t("alertAreas.allCategories")}
-              </Text>
-            </Pressable>
-            <View style={s.chips}>
-              {CATEGORIES.map((k) => (
-                <Pressable
-                  key={k}
-                  onPress={() => toggleCategory(k)}
-                  style={[s.chip, categories.includes(k) && s.chipOn]}
-                >
-                  <Text
-                    style={[s.chipText, categories.includes(k) && s.chipTextOn]}
-                  >
-                    {t(LABELS[k])}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={s.label}>{t("alertAreas.automaticExpiry")}</Text>
-            <View style={s.chips}>
-              {EXPIRIES.map((v) => (
-                <Pressable
-                  key={v}
-                  onPress={() => setExpiryHours(v)}
-                  style={[s.chip, expiryHours === v && s.chipOn]}
-                >
-                  <Text style={[s.chipText, expiryHours === v && s.chipTextOn]}>
-                    {expiryLabel(v)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              disabled={busy}
-              onPress={() => void updateCurrent(false)}
-              style={[s.primary, busy && { opacity: 0.5 }]}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={s.primaryText}>
-                  {current?.active
-                    ? t("alertAreas.updatePositionNow")
-                    : t("alertAreas.enableCurrentLocation")}
-                </Text>
-              )}
-            </Pressable>
-            <View style={s.divider} />
-            <View style={s.savedHeader}>
-              <View>
-                <Text style={s.h2}>{t("alertAreas.savedAreas")}</Text>
-                <Text style={s.help}>{saved.length} / 3</Text>
-              </View>
-              <Pressable
-                onPress={() => router.push("/alert-area-editor" as any)}
-                style={s.secondary}
-              >
-                <Text style={s.secondaryText}>
-                  {t("alertAreas.manageSavedAreas")}
-                </Text>
-              </Pressable>
-            </View>
-            {saved.map((a, i) => (
-              <View key={a.id} style={s.savedRow}>
+            {!panelCollapsed && (
+              <>
                 <View
                   style={[
-                    s.dot,
-                    {
-                      backgroundColor: ["#2563EB", "#7C3AED", "#EA580C"][i % 3],
-                    },
+                    s.statusBox,
+                    current?.active
+                      ? s.statusBoxActive
+                      : busy
+                        ? s.statusBoxBusy
+                        : s.statusBoxOff,
                   ]}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.savedTitle}>{a.name}</Text>
-                  <Text style={s.statusMeta}>
-                    {a.active
-                      ? t("alertAreas.activeArea")
-                      : t("alertAreas.pausedArea")}{" "}
-                    ·{" "}
-                    {a.all_categories
-                      ? t("alertAreas.allCategories")
-                      : t("alertAreas.categoryCount", {
-                          count: a.category_keys?.length || 0,
-                        })}
-                  </Text>
+                >
+                  {busy ? (
+                    <ActivityIndicator size="small" color="#2563EB" />
+                  ) : (
+                    <Ionicons
+                      name="locate"
+                      size={20}
+                      color={current?.active ? "#15803D" : "#64748B"}
+                    />
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.statusTitle}>
+                      {current?.active
+                        ? t("alertAreas.currentLocationActive")
+                        : t("alertAreas.currentLocationOff")}
+                    </Text>
+                    <Text style={s.statusMeta}>
+                      {t("alertAreas.lastUpdated")}:{" "}
+                      {formatUpdated(current?.location_updated_at)}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
-            <Text style={s.privacy}>{t("alertAreas.locationPrivacy")}</Text>
+                <Text style={s.label}>{t("alertAreas.radius")}</Text>
+                <View style={s.chips}>
+                  {RADII.map((v) => (
+                    <Pressable
+                      key={v}
+                      onPress={() => setRadius(v)}
+                      style={[s.chip, radius === v && s.chipOn]}
+                    >
+                      <Text style={[s.chipText, radius === v && s.chipTextOn]}>
+                        {v / 1000} km
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={s.label}>{t("alertAreas.categories")}</Text>
+                <Pressable
+                  onPress={() => {
+                    setAllCategories(true);
+                    setCategories([]);
+                  }}
+                  style={[s.chip, s.allChip, allCategories && s.chipOn]}
+                >
+                  <Text style={[s.chipText, allCategories && s.chipTextOn]}>
+                    {t("alertAreas.allCategories")}
+                  </Text>
+                </Pressable>
+                <View style={s.chips}>
+                  {CATEGORIES.map((k) => (
+                    <Pressable
+                      key={k}
+                      onPress={() => toggleCategory(k)}
+                      style={[s.chip, categories.includes(k) && s.chipOn]}
+                    >
+                      <Text
+                        style={[
+                          s.chipText,
+                          categories.includes(k) && s.chipTextOn,
+                        ]}
+                      >
+                        {t(LABELS[k])}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={s.label}>{t("alertAreas.automaticExpiry")}</Text>
+                <View style={s.chips}>
+                  {EXPIRIES.map((v) => (
+                    <Pressable
+                      key={v}
+                      onPress={() => setExpiryHours(v)}
+                      style={[s.chip, expiryHours === v && s.chipOn]}
+                    >
+                      <Text
+                        style={[s.chipText, expiryHours === v && s.chipTextOn]}
+                      >
+                        {expiryLabel(v)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable
+                  disabled={busy}
+                  onPress={() => void updateCurrent(false)}
+                  style={[s.primary, busy && { opacity: 0.5 }]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.primaryText}>
+                      {current?.active
+                        ? t("alertAreas.updatePositionNow")
+                        : t("alertAreas.enableCurrentLocation")}
+                    </Text>
+                  )}
+                </Pressable>
+                <View style={s.divider} />
+                <View style={s.savedHeader}>
+                  <View>
+                    <Text style={s.h2}>{t("alertAreas.savedAreas")}</Text>
+                    <Text style={s.help}>{saved.length} / 3</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => router.push("/alert-area-editor" as any)}
+                    style={s.secondary}
+                  >
+                    <Text style={s.secondaryText}>
+                      {t("alertAreas.manageSavedAreas")}
+                    </Text>
+                  </Pressable>
+                </View>
+                {saved.map((a, i) => (
+                  <View key={a.id} style={s.savedRow}>
+                    <View
+                      style={[
+                        s.dot,
+                        {
+                          backgroundColor: ["#2563EB", "#7C3AED", "#EA580C"][
+                            i % 3
+                          ],
+                        },
+                      ]}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.savedTitle}>{a.name}</Text>
+                      <Text style={s.statusMeta}>
+                        {a.active
+                          ? t("alertAreas.activeArea")
+                          : t("alertAreas.pausedArea")}{" "}
+                        ·{" "}
+                        {a.all_categories
+                          ? t("alertAreas.allCategories")
+                          : t("alertAreas.categoryCount", {
+                              count: a.category_keys?.length || 0,
+                            })}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                <Text style={s.privacy}>{t("alertAreas.locationPrivacy")}</Text>
+              </>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -488,6 +599,26 @@ const s = StyleSheet.create({
     color: theme.colors.muted,
     marginTop: 2,
   },
+  panelHandleRow: {
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  panelHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+  },
+  collapsedMeta: {
+    marginTop: 4,
+    color: theme.colors.muted,
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  panelCollapsed: { maxHeight: 122 },
   panel: {
     position: "absolute",
     left: 10,
@@ -519,6 +650,18 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  statusBoxActive: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+  statusBoxOff: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#CBD5E1",
+  },
+  statusBoxBusy: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
   },
   statusTitle: { fontWeight: "900", color: "#166534" },
   statusMeta: {

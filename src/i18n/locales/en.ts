@@ -1144,6 +1144,15 @@ export const en = {
     "Could not update your position. Please try again.",
   "alertAreas.locationDisableFailed":
     "Could not turn off the current-location alert.",
+  "alertAreas.showAllAreas": "Show all areas",
+  "alertAreas.collapsePanel": "Collapse settings",
+  "alertAreas.expandPanel": "Expand settings",
+  "alertAreas.locationReadFailed":
+    "Could not read your current position. Check location access and try again.",
+  "alertAreas.locationStorageFailed":
+    "Your position was found, but the notification area could not be saved. Please try again.",
+  "alertAreas.locationServiceFailed":
+    "The location alert service is unavailable right now. Please try again.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

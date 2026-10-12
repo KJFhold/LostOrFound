@@ -397,13 +397,14 @@ export default function AlertAreasScreen() {
                   </Text>
                 )}
               </View>
-              <Switch
-                value={!!current?.active}
-                disabled={busy}
-                onValueChange={(v) =>
-                  v ? void updateCurrent(false) : void disableCurrent()
-                }
-              />
+              {!!current?.active && (
+                <Switch
+                  accessibilityLabel={t("alertAreas.disableCurrentLocation")}
+                  value
+                  disabled={busy}
+                  onValueChange={() => void disableCurrent()}
+                />
+              )}
             </View>
             {!panelCollapsed && (
               <>

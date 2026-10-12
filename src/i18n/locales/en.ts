@@ -1153,6 +1153,7 @@ export const en = {
     "Your position was found, but the notification area could not be saved. Please try again.",
   "alertAreas.locationServiceFailed":
     "The location alert service is unavailable right now. Please try again.",
+  "alertAreas.disableCurrentLocation": "Turn off current-location alert",
 } as const;
 
 export type TranslationKey = keyof typeof en;

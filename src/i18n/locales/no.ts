@@ -1149,4 +1149,5 @@ export const no: TranslationDictionary = {
     "Posisjonen ble funnet, men varslingsområdet kunne ikke lagres. Prøv igjen.",
   "alertAreas.locationServiceFailed":
     "Tjenesten for posisjonsvarsler er ikke tilgjengelig akkurat nå. Prøv igjen.",
+  "alertAreas.disableCurrentLocation": "Slå av posisjonsvarsel",
 };

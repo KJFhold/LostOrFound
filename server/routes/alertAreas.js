@@ -71,7 +71,7 @@ router.put("/current-location", requireUser, async (req, res) => {
     if (!CURRENT_LOCATION_EXPIRIES.has(expiryHours))
       return res.status(400).json({ error: "INVALID_EXPIRY" });
     const { data, error } = await supaAdmin.rpc(
-      "upsert_current_location_watch_area",
+      "upsert_current_location_watch_area_v2",
       {
         p_user_id: req.user.id,
         p_lat: latitude,
@@ -86,11 +86,13 @@ router.put("/current-location", requireUser, async (req, res) => {
     if (error) throw error;
     return res.json({ area: Array.isArray(data) ? data[0] : data });
   } catch (error) {
-    console.error(
-      "[alert-areas] current location update failed",
-      error?.message || error,
-    );
-    return res.status(500).json({ error: "CURRENT_LOCATION_UPDATE_FAILED" });
+    console.error("[alert-areas] current location storage failed", {
+      message: String(error?.message || error || ""),
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    return res.status(500).json({ error: "CURRENT_LOCATION_STORAGE_FAILED" });
   }
 });
 router.delete("/current-location", requireUser, async (req, res) => {
@@ -111,7 +113,8 @@ router.post("/", requireUser, async (req, res) => {
     const countResult = await supaAdmin
       .from("notification_watch_areas")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", req.user.id);
+      .eq("user_id", req.user.id)
+      .neq("source_type", "CURRENT_LOCATION");
 
     if (countResult.error) throw countResult.error;
 

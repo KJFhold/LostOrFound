@@ -6,10 +6,22 @@ const { supaAdmin } = require("../supabaseClient");
 const { requireUser } = require("../mw/auth");
 
 const RADII = new Set([250, 500, 1000, 3000, 5000, 10000]);
+const CURRENT_LOCATION_RADII = new Set([1000, 3000, 5000, 10000]);
+const CURRENT_LOCATION_EXPIRIES = new Set([0, 24, 72, 168]);
 
 const cleanCategories = (value) =>
   Array.isArray(value)
-    ? [...new Set(value.map((item) => String(item || "").trim().toUpperCase()).filter(Boolean))].slice(0, 30)
+    ? [
+        ...new Set(
+          value
+            .map((item) =>
+              String(item || "")
+                .trim()
+                .toUpperCase(),
+            )
+            .filter(Boolean),
+        ),
+      ].slice(0, 30)
     : [];
 
 const validCoordinate = (latitude, longitude) =>
@@ -46,6 +58,54 @@ router.get("/", requireUser, async (req, res) => {
   }
 });
 
+router.put("/current-location", requireUser, async (req, res) => {
+  try {
+    const latitude = Number(req.body?.latitude);
+    const longitude = Number(req.body?.longitude);
+    const radiusM = Number(req.body?.radiusM);
+    const expiryHours = Number(req.body?.expiryHours ?? 168);
+    if (!validCoordinate(latitude, longitude))
+      return res.status(400).json({ error: "INVALID_COORDINATES" });
+    if (!CURRENT_LOCATION_RADII.has(radiusM))
+      return res.status(400).json({ error: "INVALID_RADIUS" });
+    if (!CURRENT_LOCATION_EXPIRIES.has(expiryHours))
+      return res.status(400).json({ error: "INVALID_EXPIRY" });
+    const { data, error } = await supaAdmin.rpc(
+      "upsert_current_location_watch_area",
+      {
+        p_user_id: req.user.id,
+        p_lat: latitude,
+        p_lng: longitude,
+        p_radius_m: radiusM,
+        p_category_keys: cleanCategories(req.body?.categoryKeys),
+        p_all_categories: req.body?.allCategories !== false,
+        p_push_enabled: req.body?.pushEnabled !== false,
+        p_expiry_hours: expiryHours,
+      },
+    );
+    if (error) throw error;
+    return res.json({ area: Array.isArray(data) ? data[0] : data });
+  } catch (error) {
+    console.error(
+      "[alert-areas] current location update failed",
+      error?.message || error,
+    );
+    return res.status(500).json({ error: "CURRENT_LOCATION_UPDATE_FAILED" });
+  }
+});
+router.delete("/current-location", requireUser, async (req, res) => {
+  try {
+    const { error } = await supaAdmin
+      .from("notification_watch_areas")
+      .delete()
+      .eq("user_id", req.user.id)
+      .eq("source_type", "CURRENT_LOCATION");
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: "CURRENT_LOCATION_DISABLE_FAILED" });
+  }
+});
 router.post("/", requireUser, async (req, res) => {
   try {
     const countResult = await supaAdmin
@@ -59,7 +119,9 @@ router.post("/", requireUser, async (req, res) => {
       return res.status(409).json({ error: "WATCH_AREA_LIMIT_REACHED" });
     }
 
-    const name = String(req.body?.name || "").trim().slice(0, 80);
+    const name = String(req.body?.name || "")
+      .trim()
+      .slice(0, 80);
     if (!name) return res.status(400).json({ error: "NAME_REQUIRED" });
 
     const areaType = String(req.body?.areaType || "CIRCLE").toUpperCase();
@@ -139,7 +201,9 @@ router.patch("/:id", requireUser, async (req, res) => {
     const hasGeometry = req.body?.areaType != null;
 
     if (hasGeometry) {
-      const name = String(req.body?.name || "").trim().slice(0, 80);
+      const name = String(req.body?.name || "")
+        .trim()
+        .slice(0, 80);
       const areaType = String(req.body?.areaType || "CIRCLE").toUpperCase();
       const categoryKeys = cleanCategories(req.body?.categoryKeys);
       const allCategories = req.body?.allCategories !== false;
@@ -149,17 +213,21 @@ router.patch("/:id", requireUser, async (req, res) => {
       let boundaryPoints = [];
 
       if (!name) return res.status(400).json({ error: "NAME_REQUIRED" });
-      if (!["CIRCLE", "POLYGON"].includes(areaType)) return res.status(400).json({ error: "INVALID_AREA_TYPE" });
+      if (!["CIRCLE", "POLYGON"].includes(areaType))
+        return res.status(400).json({ error: "INVALID_AREA_TYPE" });
 
       if (areaType === "CIRCLE") {
         latitude = Number(req.body?.latitude);
         longitude = Number(req.body?.longitude);
         radiusM = Number(req.body?.radiusM);
-        if (!validCoordinate(latitude, longitude)) return res.status(400).json({ error: "INVALID_COORDINATES" });
-        if (!RADII.has(radiusM)) return res.status(400).json({ error: "INVALID_RADIUS" });
+        if (!validCoordinate(latitude, longitude))
+          return res.status(400).json({ error: "INVALID_COORDINATES" });
+        if (!RADII.has(radiusM))
+          return res.status(400).json({ error: "INVALID_RADIUS" });
       } else {
         boundaryPoints = cleanBoundaryPoints(req.body?.boundaryPoints);
-        if (boundaryPoints.length < 3) return res.status(400).json({ error: "INVALID_BOUNDARY" });
+        if (boundaryPoints.length < 3)
+          return res.status(400).json({ error: "INVALID_BOUNDARY" });
       }
 
       const { data, error } = await supaAdmin.rpc("update_user_watch_area_v2", {
@@ -183,7 +251,8 @@ router.patch("/:id", requireUser, async (req, res) => {
 
     const statusPatch = {};
     if (req.body?.active != null) statusPatch.active = Boolean(req.body.active);
-    if (req.body?.pushEnabled != null) statusPatch.push_enabled = Boolean(req.body.pushEnabled);
+    if (req.body?.pushEnabled != null)
+      statusPatch.push_enabled = Boolean(req.body.pushEnabled);
     statusPatch.updated_at = new Date().toISOString();
 
     const { data, error } = await supaAdmin
@@ -191,7 +260,9 @@ router.patch("/:id", requireUser, async (req, res) => {
       .update(statusPatch)
       .eq("id", id)
       .eq("user_id", req.user.id)
-      .select("id,name,area_type,radius_m,category_keys,all_categories,push_enabled,active,created_at,updated_at")
+      .select(
+        "id,name,area_type,radius_m,category_keys,all_categories,push_enabled,active,created_at,updated_at",
+      )
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "NOT_FOUND" });
@@ -199,7 +270,8 @@ router.patch("/:id", requireUser, async (req, res) => {
   } catch (error) {
     const message = String(error?.message || "");
     console.error("[alert-areas] update failed", message);
-    if (message.includes("INVALID_BOUNDARY")) return res.status(400).json({ error: "INVALID_BOUNDARY" });
+    if (message.includes("INVALID_BOUNDARY"))
+      return res.status(400).json({ error: "INVALID_BOUNDARY" });
     return res.status(500).json({ error: "WATCH_AREA_UPDATE_FAILED" });
   }
 });

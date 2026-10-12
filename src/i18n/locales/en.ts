@@ -1111,8 +1111,9 @@ export const en = {
     "The match level is based on item, color, location, time and available text details.",
   "cases.reactivation.success.title": "Report activated",
   "cases.reactivation.success.body":
-    "The report is now active for 30 new days. Matches update automatically.",
+    "The report is now visible in new matches for 30 days.",
   "match.ranked.matches.for.your.case": "Best matches first",
+  "cases.reactivation.success.close": "Close",
 } as const;
 
 export type TranslationKey = keyof typeof en;

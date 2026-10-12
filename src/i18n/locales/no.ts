@@ -1108,6 +1108,7 @@ export const no: TranslationDictionary = {
     "Treffnivået bygger på gjenstand, farge, sted, tid og tilgjengelige tekstdetaljer.",
   "cases.reactivation.success.title": "Rapporten er aktivert",
   "cases.reactivation.success.body":
-    "Rapporten er nå aktiv i 30 nye dager. Treffene oppdateres automatisk.",
+    "Rapporten er nå synlig i nye treff i 30 dager.",
   "match.ranked.matches.for.your.case": "Beste treff øverst",
+  "cases.reactivation.success.close": "Lukk",
 };

@@ -428,6 +428,7 @@ export default function MyReportsScreen() {
   const [reactivatingReportId, setReactivatingReportId] = useState<
     string | null
   >(null);
+  const [reactivationSuccessOpen, setReactivationSuccessOpen] = useState(false);
   const matchToReportRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -697,10 +698,7 @@ export default function MyReportsScreen() {
       await activateTestReportOrder(created.order.id);
       await load();
       setSection("active");
-      Alert.alert(
-        t("cases.reactivation.success.title"),
-        t("cases.reactivation.success.body"),
-      );
+      setReactivationSuccessOpen(true);
     } catch (error: any) {
       Alert.alert(
         t("cases.reactivation.failed"),
@@ -1115,6 +1113,35 @@ export default function MyReportsScreen() {
           </View>
         </View>
       </Modal>
+      <Modal
+        transparent
+        visible={reactivationSuccessOpen}
+        animationType="fade"
+        onRequestClose={() => setReactivationSuccessOpen(false)}
+      >
+        <View style={successStyles.backdrop}>
+          <View style={successStyles.card}>
+            <View style={successStyles.iconCircle}>
+              <Text style={successStyles.iconText}>✓</Text>
+            </View>
+            <Text style={successStyles.title}>
+              {t("cases.reactivation.success.title")}
+            </Text>
+            <Text style={successStyles.body}>
+              {t("cases.reactivation.success.body")}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              style={successStyles.closeButton}
+              onPress={() => setReactivationSuccessOpen(false)}
+            >
+              <Text style={successStyles.closeButtonText}>
+                {t("cases.reactivation.success.close")}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1390,5 +1417,77 @@ const dialogStyles = StyleSheet.create({
     textAlign: "center",
     width: "100%",
     paddingHorizontal: 8,
+  },
+});
+
+const successStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 410,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
+    borderWidth: 1,
+    borderColor: "#D1FAE5",
+    shadowColor: "#000000",
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DCFCE7",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  iconText: { color: "#15803D", fontSize: 32, fontWeight: "900" },
+  title: {
+    marginTop: 18,
+    textAlign: "center",
+    color: theme.colors.text,
+    fontSize: 21,
+    lineHeight: 27,
+    fontWeight: "900",
+  },
+  body: {
+    marginTop: 10,
+    textAlign: "center",
+    color: theme.colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "600",
+  },
+  closeButton: {
+    width: "100%",
+    minHeight: 50,
+    marginTop: 22,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 16,
+  },
+  closeButtonText: {
+    width: "100%",
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+    textAlign: "center",
   },
 });

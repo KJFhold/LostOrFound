@@ -1,3 +1,4 @@
+
 export const en = {
   "tabs.home": "Home",
   "tabs.cases": "My cases",
@@ -1153,6 +1154,12 @@ export const en = {
     "Your position was found, but the notification area could not be saved. Please try again.",
   "alertAreas.locationServiceFailed":
     "The location alert service is unavailable right now. Please try again.",
+  "areaAlertCreate.relevantUsersMayBeNotified":
+    "Relevant users in the area may be notified.",
+  "areaAlertCreate.recipientCountPrivate":
+    "Recipient numbers are not shown for privacy.",
+  "areaAlertCreate.relevantUsersWillBeNotified":
+    "Relevant users in the area will be notified.",
   "alertAreas.disableCurrentLocation": "Turn off current-location alert",
 } as const;
 

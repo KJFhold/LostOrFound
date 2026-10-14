@@ -1,3 +1,4 @@
+
 "use strict";
 const { supaAdmin } = require("../supabaseClient");
 
@@ -69,8 +70,11 @@ async function dispatchAreaAlertCampaign(campaignId) {
       type: "AREA_ALERT",
       entity_type: "area_alert_campaign",
       entity_id: id,
-      title: "Mistet gjenstand i området ditt",
-      body: `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
+      title: candidate.language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt",
+      body:
+        candidate.language === "en"
+          ? `${candidate.report_title || "An item"} was reported lost near an area you follow.`
+          : `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
       notification_key: notificationKey,
       agg_count: 1,
     });

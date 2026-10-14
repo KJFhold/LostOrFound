@@ -1,0 +1,12 @@
+"use strict";
+const fs=require("fs"),p=require("path"),r=f=>fs.readFileSync(p.join(process.cwd(),f),"utf8");
+const app=r("app/geo-alert-create.tsx"),push=r("src/lib/pushNotifications.ts"),dispatch=r("server/lib/geoAlertDispatch.js"),observations=r("server/routes/observations.js");
+for(const forbidden of ["eligibleUsers} {tr", "eligibleInstallations} {tr", "dispatchSummary.sent"]) if(app.includes(forbidden)) throw Error(`Exact recipient count remains: ${forbidden}`);
+for(const required of ["areaAlertCreate.relevantUsersMayBeNotified","areaAlertCreate.recipientCountPrivate","areaAlertCreate.relevantUsersWillBeNotified"]) if(!app.includes(required)) throw Error(`Missing private recipient UI: ${required}`);
+if(!push.includes('kind === "observation"')) throw Error("Observation push deep link missing");
+if(!dispatch.includes('candidate.language === "en"')) throw Error("Localized in-app area alert missing");
+if(!observations.includes('const {notifyUser}=require("../lib/userNotify")')) throw Error("Observation notifier import missing");
+if((observations.match(/await notifyUser\(/g)||[]).length<2) throw Error("Observation notification events are incomplete");
+const keys=s=>new Set([...s.matchAll(/^\s*"([^"]+)"\s*:/gm)].map(m=>m[1])),en=keys(r("src/i18n/locales/en.ts")),no=keys(r("src/i18n/locales/no.ts"));
+if([...en].some(k=>!no.has(k))||[...no].some(k=>!en.has(k))) throw Error("Locale parity failed");
+console.log(`OK: T1.8E.5A checks passed. ${en.size} keys in both locales.`);

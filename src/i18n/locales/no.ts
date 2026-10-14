@@ -1,3 +1,4 @@
+
 import type { TranslationDictionary } from "./en";
 
 export const no: TranslationDictionary = {
@@ -1149,5 +1150,11 @@ export const no: TranslationDictionary = {
     "Posisjonen ble funnet, men varslingsområdet kunne ikke lagres. Prøv igjen.",
   "alertAreas.locationServiceFailed":
     "Tjenesten for posisjonsvarsler er ikke tilgjengelig akkurat nå. Prøv igjen.",
+  "areaAlertCreate.relevantUsersMayBeNotified":
+    "Relevante brukere i området kan bli varslet.",
+  "areaAlertCreate.recipientCountPrivate":
+    "Antall mottakere vises ikke av personvernhensyn.",
+  "areaAlertCreate.relevantUsersWillBeNotified":
+    "Relevante brukere i området blir varslet.",
   "alertAreas.disableCurrentLocation": "Slå av posisjonsvarsel",
 };

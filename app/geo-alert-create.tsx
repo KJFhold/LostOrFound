@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MapView, { Circle, Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
@@ -38,7 +39,6 @@ export default function GeoAlertCreateScreen() {
   const [activating, setActivating] = useState(false);
   const [result, setResult] = useState<GeoAlertPreviewResult | null>(null);
   const [activatedUntil, setActivatedUntil] = useState<string | null>(null);
-  const [dispatchSummary, setDispatchSummary] = useState<{ sent: number; skipped: number } | null>(null);
   const validLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
   const center = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
   const region = useMemo<Region>(() => ({ latitude, longitude, latitudeDelta: 0.09, longitudeDelta: 0.09 }), [latitude, longitude]);
@@ -53,7 +53,6 @@ export default function GeoAlertCreateScreen() {
   useEffect(() => {
     setResult(null);
     setActivatedUntil(null);
-    setDispatchSummary(null);
     requestIdRef.current = null;
     if (validLocation) {
       const delta = Math.max(0.015, Math.min(1.2, radiusM / 18000));
@@ -105,10 +104,6 @@ export default function GeoAlertCreateScreen() {
       });
       const activated = await activateTestReportOrder(created.order.id);
       setActivatedUntil(String(activated.entitlement?.current_period_end || ""));
-      setDispatchSummary({
-        sent: Number(activated.areaAlertDispatch?.sent || 0),
-        skipped: Number(activated.areaAlertDispatch?.skippedAsDuplicate || 0),
-      });
     } catch (e: any) {
       Alert.alert(tr(language, "areaAlertCreate.could.not.create.area.alert"), e?.message || String(e));
     } finally {
@@ -150,8 +145,8 @@ export default function GeoAlertCreateScreen() {
 
         {result && <View style={styles.result}>
           <Text style={styles.resultEyebrow}>{tr(language, "areaAlertCreate.current.estimate")}</Text>
-          <Text style={styles.resultTitle}>{result.preview.eligibleUsers} {tr(language, "areaAlertCreate.qualified.users")}</Text>
-          <Text style={styles.resultMeta}>{result.preview.eligibleInstallations} {tr(language, "areaAlertCreate.active.installations")} · {result.preview.areaSqKm.toFixed(2)} km²</Text>
+          <Text style={styles.resultTitle}>{tr(language, "areaAlertCreate.relevantUsersMayBeNotified")}</Text>
+          <Text style={styles.resultMeta}>{result.preview.areaSqKm.toFixed(2)} km² · {tr(language, "areaAlertCreate.recipientCountPrivate")}</Text>
           <View style={styles.priceRow}><Text style={styles.priceLabel}>{tr(language, "areaAlertCreate.test.price")}</Text><Text style={styles.price}>{(result.quote.amountOre / 100).toLocaleString(tr(language, "areaAlertCreate.en.gb"))} kr</Text></View>
           <Text style={styles.warning}>{tr(language, "areaAlertCreate.test.mode.no.real.payment.is.made.activation.cre")}</Text>
           {!activatedUntil ? (
@@ -162,7 +157,7 @@ export default function GeoAlertCreateScreen() {
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>{tr(language, "areaAlertCreate.area.alert.active")}</Text>
               <Text style={styles.successText}>{tr(language, "areaAlertCreate.active.until")}: {new Date(activatedUntil).toLocaleString(tr(language, "areaAlertCreate.en.gb"))}</Text>
-              {dispatchSummary && <Text style={styles.successText}>{language === "en" ? `${dispatchSummary.sent} notification(s) sent` : `${dispatchSummary.sent} varsel sendt`}{dispatchSummary.skipped ? ` · ${dispatchSummary.skipped} duplikat hoppet over` : ""}</Text>}
+              <Text style={styles.successText}>{tr(language, "areaAlertCreate.relevantUsersWillBeNotified")}</Text>
               <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>{tr(language, "areaAlertCreate.back.to.report")}</Text></Pressable>
             </View>
           )}

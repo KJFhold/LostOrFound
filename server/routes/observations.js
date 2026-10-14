@@ -1,8 +1,10 @@
+
 "use strict";
 const express=require("express");
 const router=express.Router();
 const {supaAdmin}=require("../supabaseClient");
 const {requireUser}=require("../mw/auth");
+const {notifyUser}=require("../lib/userNotify");
 function cleanText(v,n){const s=String(v||"").trim();return s?s.slice(0,n):null;}
 function validPoint(lat,lng){return Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;}
 async function getCampaign(id){const q=await supaAdmin.from("geo_alert_campaigns").select("id,user_id,report_id,status,ends_at,reports(id,user_id,type,status,deleted_at,title)").eq("id",id).maybeSingle();if(q.error)throw q.error;return q.data||null;}
@@ -23,7 +25,13 @@ router.post("/",requireUser,async(req,res)=>{try{
  if(!(await received(campaignId,userId)))return res.status(403).json({error:"AREA_ALERT_ACCESS_DENIED"});
  const row={campaign_id:campaignId,report_id:campaign.report_id,observer_user_id:userId,report_owner_user_id:report.user_id,observation_type:type,location:`SRID=4326;POINT(${lng} ${lat})`,observed_at:observedAt.toISOString(),comment:cleanText(req.body?.comment,1000),movement_direction:type==="SEEN"?cleanText(req.body?.movementDirection,120):null,has_item:type==="FOUND"?req.body.hasItem:false,client_request_id:clientRequestId,updated_at:new Date().toISOString()};
  const q=await supaAdmin.from("area_alert_observations").upsert(row,{onConflict:"observer_user_id,client_request_id"}).select("id,campaign_id,report_id,observation_type,observed_at,comment,movement_direction,has_item,status,created_at").single();if(q.error)throw q.error;
- const found=type==="FOUND";const ne=await supaAdmin.from("notifications").insert({user_id:report.user_id,type:"AREA_ALERT_OBSERVATION",entity_type:"observation",entity_id:q.data.id,titles:found?{no:"Mulig funn meldt",en:"Possible find reported"}:{no:"Ny observasjon meldt",en:"New observation reported"},bodies:found?{no:"Gjenstanden kan være funnet. Åpne observasjonen for detaljer.",en:"The item may have been found. Open the observation for details."}:{no:"Gjenstanden kan være sett. Åpne observasjonen for detaljer.",en:"The item may have been seen. Open the observation for details."},notification_key:`AREA_ALERT_OBSERVATION:${q.data.id}`});if(ne.error&&ne.error.code!=="23505")throw ne.error;
+ const found=type==="FOUND";
+ await notifyUser({
+  userId:report.user_id,type:"AREA_ALERT_OBSERVATION",entityType:"observation",entityId:q.data.id,
+  titles:found?{no:"Mulig funn meldt",en:"Possible find reported"}:{no:"Ny observasjon meldt",en:"New observation reported"},
+  bodies:found?{no:"Gjenstanden kan være funnet. Åpne observasjonen for detaljer.",en:"The item may have been found. Open the observation for details."}:{no:"Gjenstanden kan være sett. Åpne observasjonen for detaljer.",en:"The item may have been seen. Open the observation for details."},
+  data:{observationId:q.data.id,reportId:campaign.report_id}
+ });
  return res.json({ok:true,observation:q.data});
 }catch(e){return res.status(500).json({error:e?.message||"OBSERVATION_CREATE_FAILED"});}});
 router.get("/:id",requireUser,async(req,res)=>{try{
@@ -37,7 +45,11 @@ router.post("/:id/status",requireUser,async(req,res)=>{try{
  const userId=req.user?.id,id=String(req.params.id||"").trim(),status=String(req.body?.status||"").toUpperCase();if(!["RELEVANT","DISMISSED"].includes(status))return res.status(400).json({error:"INVALID_STATUS"});
  const o=await supaAdmin.from("area_alert_observations").select("id,report_owner_user_id,observer_user_id").eq("id",id).maybeSingle();if(o.error)throw o.error;if(!o.data||o.data.report_owner_user_id!==userId)return res.status(404).json({error:"OBSERVATION_NOT_FOUND"});
  const u=await supaAdmin.from("area_alert_observations").update({status,updated_at:new Date().toISOString()}).eq("id",id).select("id,status").single();if(u.error)throw u.error;
- await supaAdmin.from("notifications").insert({user_id:o.data.observer_user_id,type:"OBSERVATION_STATUS",entity_type:"observation",entity_id:id,titles:status==="RELEVANT"?{no:"Opplysningen er vurdert som relevant",en:"Information marked as relevant"}:{no:"Opplysningen ble avvist",en:"Information dismissed"},bodies:status==="RELEVANT"?{no:"Rapporteieren har markert opplysningen din som relevant.",en:"The report owner marked your information as relevant."}:{no:"Rapporteieren har vurdert opplysningen som ikke relevant.",en:"The report owner marked your information as not relevant."}});
+ await notifyUser({
+  userId:o.data.observer_user_id,type:"OBSERVATION_STATUS",entityType:"observation",entityId:id,
+  titles:status==="RELEVANT"?{no:"Opplysningen er vurdert som relevant",en:"Information marked as relevant"}:{no:"Opplysningen ble avvist",en:"Information dismissed"},
+  bodies:status==="RELEVANT"?{no:"Rapporteieren har markert opplysningen din som relevant.",en:"The report owner marked your information as relevant."}:{no:"Rapporteieren har vurdert opplysningen som ikke relevant.",en:"The report owner marked your information as not relevant."}
+ });
  return res.json({ok:true,observation:u.data});
 }catch(e){return res.status(500).json({error:e?.message||"OBSERVATION_STATUS_FAILED"});}});
 module.exports=router;

@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { Linking, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -122,6 +123,7 @@ function navigateFromData(router: ReturnType<typeof useRouter>, data: any) {
   const id = String(data?.targetId ?? "");
   if (kind === "chat" && id) return router.push(`/chat/${id}`);
   if (kind === "match" && id) return router.push(`/matches/${id}`);
+  if (kind === "observation" && id) return router.push(`/observation/${id}`);
   if (kind === "report" && id) return router.push({ pathname: "/my-reports", params: { section: data?.section ?? "active", reportId: id } });
   if ((kind === "area_alert_campaign" || kind === "areaAlert") && id) return router.push(`/area-alert/${id}`);
   if (String(data?.type || "").toUpperCase() === "GEO_ALERT" || String(data?.type || "").toUpperCase() === "AREA_ALERT") {

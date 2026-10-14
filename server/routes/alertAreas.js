@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
+
 const express = require("express");
 const router = express.Router();
 const { supaAdmin } = require("../supabaseClient");
@@ -109,7 +111,7 @@ router.put("/current-location", requireUser, async (req, res) => {
           .single()
       : await supaAdmin
           .from("notification_watch_areas")
-          .insert({ ...values, user_id: req.user.id })
+          .insert({ id: randomUUID(), ...values, user_id: req.user.id })
           .select(
             "id,name,area_type,radius_m,category_keys,all_categories,push_enabled,active,source_type,expires_at,location_updated_at",
           )

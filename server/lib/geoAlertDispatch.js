@@ -162,6 +162,11 @@ async function dispatchAreaAlertCampaign(campaignId) {
     failed,
   });
 
+  console.info("[geo-alert][delivery-summary]", {
+    campaignId,
+    result: { sent, skippedAsDuplicate, failed },
+  });
+
   return {
     ok: true,
     eligible: (candidates || []).length,

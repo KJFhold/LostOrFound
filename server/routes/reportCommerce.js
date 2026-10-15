@@ -509,7 +509,6 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
                 starts_at: now.toISOString(),
                 ends_at: periodEnd.toISOString(),
                 activated_at: now.toISOString(),
-                updated_at: now.toISOString(),
               })
               .eq("id", existingCampaign.id)
               .eq("report_id", order.report_id)
@@ -584,6 +583,33 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
         .status(400)
         .json({ error: "GEO_ALERT_ORDER_ACTIVATION_FAILED" });
     }
+    const { data: supersededOrders, error: supersedeError } = await supaAdmin
+      .from("report_orders")
+      .update({ status: "SUPERSEDED", updated_at: now.toISOString() })
+      .eq("report_id", order.report_id)
+      .eq("user_id", userId)
+      .eq("product_code", order.product_code)
+      .eq("status", "ACTIVE")
+      .neq("id", order.id)
+      .select("id");
+
+    if (supersedeError) {
+      console.error("[geo-alert][previous-orders-supersede-failed]", {
+        orderId: order.id,
+        reportId: order.report_id,
+        userId,
+        errorCode: supersedeError.code || null,
+        errorMessage: supersedeError.message || String(supersedeError),
+      });
+    } else {
+      console.info("[geo-alert][previous-orders-superseded]", {
+        orderId: order.id,
+        reportId: order.report_id,
+        userId,
+        count: supersededOrders?.length || 0,
+      });
+    }
+
     let areaAlertDispatch = null;
     if (order.created_campaign_id) {
       try {
@@ -597,7 +623,14 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
           campaignId: order.created_campaign_id,
           dispatch: areaAlertDispatch,
         });
-      } catch (dispatchError) {
+      console.info("[geo-alert][activation-delivery-result]", {
+          orderId: order.id,
+          reportId: order.report_id,
+          userId,
+          campaignId: order.created_campaign_id,
+          delivery: areaAlertDispatch,
+        });
+        } catch (dispatchError) {
         console.error(
           "[commerce] area alert dispatch failed",
           dispatchError?.message || dispatchError,

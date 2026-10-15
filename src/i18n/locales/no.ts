@@ -1,4 +1,3 @@
-
 import type { TranslationDictionary } from "./en";
 
 export const no: TranslationDictionary = {
@@ -1150,6 +1149,24 @@ export const no: TranslationDictionary = {
     "Posisjonen ble funnet, men varslingsområdet kunne ikke lagres. Prøv igjen.",
   "alertAreas.locationServiceFailed":
     "Tjenesten for posisjonsvarsler er ikke tilgjengelig akkurat nå. Prøv igjen.",
+  "pushSettings.successTitle": "Oppdatert",
+  "pushSettings.enabledSuccessBody":
+    "Pushvarsler er aktivert. Du får viktige oppdateringer og relevant aktivitet på denne enheten.",
+  "pushSettings.disabledSuccessBody":
+    "Pushvarsler fra Lost or Found er deaktivert på denne enheten.",
+  "pushSettings.testSuccessBody": "Et testvarsel ble sendt til denne enheten.",
+  "pushSettings.closeSuccess": "Lukk bekreftelsen",
+  "areaAlertCreate.testActivationNotAvailable":
+    "Testaktivering er ikke tilgjengelig for denne kontoen. Prøv igjen senere.",
+  "areaAlertCreate.productNotAvailable":
+    "Dette områdevarselet er ikke tilgjengelig akkurat nå.",
+  "areaAlertCreate.orderNotFound":
+    "Testordren ble ikke funnet. Beregn prisen på nytt og prøv igjen.",
+  "areaAlertCreate.reportNotFound": "Rapporten er ikke lenger tilgjengelig.",
+  "areaAlertCreate.locationRequired":
+    "Rapporten må ha et bekreftet sted før områdevarselet kan aktiveres.",
+  "areaAlertCreate.genericActivationError":
+    "Områdevarselet kunne ikke aktiveres. Prøv igjen.",
   "areaAlertCreate.relevantUsersMayBeNotified":
     "Relevante brukere i området kan bli varslet.",
   "areaAlertCreate.recipientCountPrivate":

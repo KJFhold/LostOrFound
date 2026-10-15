@@ -1,4 +1,3 @@
-
 export const en = {
   "tabs.home": "Home",
   "tabs.cases": "My cases",
@@ -1154,6 +1153,25 @@ export const en = {
     "Your position was found, but the notification area could not be saved. Please try again.",
   "alertAreas.locationServiceFailed":
     "The location alert service is unavailable right now. Please try again.",
+  "pushSettings.successTitle": "Updated",
+  "pushSettings.enabledSuccessBody":
+    "Push notifications are enabled. You will receive important updates and relevant activity on this device.",
+  "pushSettings.disabledSuccessBody":
+    "Push notifications from Lost or Found are disabled on this device.",
+  "pushSettings.testSuccessBody":
+    "A test notification was sent to this device.",
+  "pushSettings.closeSuccess": "Close confirmation",
+  "areaAlertCreate.testActivationNotAvailable":
+    "Test activation is not available for this account. Please try again later.",
+  "areaAlertCreate.productNotAvailable":
+    "This area alert product is not available right now.",
+  "areaAlertCreate.orderNotFound":
+    "The test order could not be found. Recalculate the price and try again.",
+  "areaAlertCreate.reportNotFound": "The report is no longer available.",
+  "areaAlertCreate.locationRequired":
+    "The report needs a confirmed location before the area alert can be activated.",
+  "areaAlertCreate.genericActivationError":
+    "The area alert could not be activated. Please try again.",
   "areaAlertCreate.relevantUsersMayBeNotified":
     "Relevant users in the area may be notified.",
   "areaAlertCreate.recipientCountPrivate":

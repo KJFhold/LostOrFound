@@ -1,11 +1,14 @@
-
 "use strict";
 const { supaAdmin } = require("../supabaseClient");
 
 async function expoSend(messages) {
   const response = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
-    headers: { Accept: "application/json", "Accept-Encoding": "gzip, deflate", "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Accept-Encoding": "gzip, deflate",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(messages),
   });
   const body = await response.json().catch(() => ({}));
@@ -23,14 +26,21 @@ async function dispatchAreaAlertCampaign(campaignId) {
 
   const { data: dispatchable, error: dispatchableError } = await supaAdmin.rpc(
     "geo_alert_campaign_is_dispatchable",
-    { p_campaign_id: id }
+    { p_campaign_id: id },
   );
   if (dispatchableError) throw dispatchableError;
-  if (!dispatchable) return { ok: false, error: "CAMPAIGN_NOT_DISPATCHABLE", eligible: 0, sent: 0, skippedAsDuplicate: 0 };
+  if (!dispatchable)
+    return {
+      ok: false,
+      error: "CAMPAIGN_NOT_DISPATCHABLE",
+      eligible: 0,
+      sent: 0,
+      skippedAsDuplicate: 0,
+    };
 
   const { data: candidates, error: candidateError } = await supaAdmin.rpc(
     "geo_alert_eligible_installations",
-    { p_campaign_id: id }
+    { p_campaign_id: id },
   );
   if (candidateError) throw candidateError;
 
@@ -38,57 +48,78 @@ async function dispatchAreaAlertCampaign(campaignId) {
   for (const candidate of candidates || []) {
     const { data: recipient, error: recipientError } = await supaAdmin
       .from("geo_alert_recipients")
-      .upsert({
-        campaign_id: id,
-        user_id: candidate.recipient_user_id,
-        installation_id: candidate.installation_id,
-        expo_push_token: candidate.expo_push_token,
-        watch_area_id: candidate.watch_area_id,
-        category_key: candidate.category_key,
-        status: "QUEUED",
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "campaign_id,installation_id", ignoreDuplicates: true })
+      .upsert(
+        {
+          campaign_id: id,
+          user_id: candidate.recipient_user_id,
+          installation_id: candidate.installation_id,
+          expo_push_token: candidate.expo_push_token,
+          watch_area_id: candidate.watch_area_id,
+          category_key: candidate.category_key,
+          status: "QUEUED",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "campaign_id,installation_id", ignoreDuplicates: true },
+      )
       .select("id")
       .maybeSingle();
     if (recipientError) throw recipientError;
-    if (recipient) accepted.push({ ...candidate, recipientRowId: recipient.id });
+    if (recipient)
+      accepted.push({ ...candidate, recipientRowId: recipient.id });
   }
 
   if (!accepted.length) {
-    return { ok: true, eligible: (candidates || []).length, sent: 0, skippedAsDuplicate: (candidates || []).length, tickets: [] };
+    return {
+      ok: true,
+      eligible: (candidates || []).length,
+      sent: 0,
+      skippedAsDuplicate: (candidates || []).length,
+      tickets: [],
+    };
   }
 
   // One persistent in-app inbox entry per recipient user, independent of OS notification history.
   const users = new Map();
   for (const candidate of accepted) {
-    if (!users.has(candidate.recipient_user_id)) users.set(candidate.recipient_user_id, candidate);
+    if (!users.has(candidate.recipient_user_id))
+      users.set(candidate.recipient_user_id, candidate);
   }
   for (const candidate of users.values()) {
     const notificationKey = `AREA_ALERT:${id}:${candidate.recipient_user_id}`;
-    const { error: notificationError } = await supaAdmin.from("notifications").insert({
-      user_id: candidate.recipient_user_id,
-      type: "AREA_ALERT",
-      entity_type: "area_alert_campaign",
-      entity_id: id,
-      title: candidate.language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt",
-      body:
-        candidate.language === "en"
-          ? `${candidate.report_title || "An item"} was reported lost near an area you follow.`
-          : `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
-      notification_key: notificationKey,
-      agg_count: 1,
-    });
-    if (notificationError && notificationError.code !== "23505") throw notificationError;
+    const { error: notificationError } = await supaAdmin
+      .from("notifications")
+      .insert({
+        user_id: candidate.recipient_user_id,
+        type: "AREA_ALERT",
+        entity_type: "area_alert_campaign",
+        entity_id: id,
+        title:
+          candidate.language === "en"
+            ? "Lost item near you"
+            : "Mistet gjenstand i området ditt",
+        body:
+          candidate.language === "en"
+            ? `${candidate.report_title || "An item"} was reported lost near an area you follow.`
+            : `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
+        notification_key: notificationKey,
+        agg_count: 1,
+      });
+    if (notificationError && notificationError.code !== "23505")
+      throw notificationError;
   }
 
   const notificationKey = `AREA_ALERT:${id}`;
   const messages = accepted.map((candidate) => ({
     to: candidate.expo_push_token,
     sound: "default",
-    title: candidate.language === "en" ? "Lost item near you" : "Mistet gjenstand i området ditt",
-    body: candidate.language === "en"
-      ? `${candidate.report_title || "An item"} was reported lost near an area you follow.`
-      : `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
+    title:
+      candidate.language === "en"
+        ? "Lost item near you"
+        : "Mistet gjenstand i området ditt",
+    body:
+      candidate.language === "en"
+        ? `${candidate.report_title || "An item"} was reported lost near an area you follow.`
+        : `${candidate.report_title || "En gjenstand"} er meldt mistet nær et område du følger.`,
     data: {
       type: "AREA_ALERT",
       targetKind: "areaAlert",
@@ -103,7 +134,8 @@ async function dispatchAreaAlertCampaign(campaignId) {
     const candidate = accepted[i];
     const ticket = tickets[i] || {};
     const status = ticket.status === "ok" ? "TICKET_OK" : "TICKET_ERROR";
-    await supaAdmin.from("geo_alert_recipients")
+    await supaAdmin
+      .from("geo_alert_recipients")
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", candidate.recipientRowId);
     await supaAdmin.from("push_delivery_log").insert({
@@ -121,6 +153,14 @@ async function dispatchAreaAlertCampaign(campaignId) {
       updated_at: new Date().toISOString(),
     });
   }
+
+  console.info("[geo-alert][recipient-summary]", {
+    campaignId,
+    candidates: candidates.length,
+    sent,
+    skippedAsDuplicate,
+    failed,
+  });
 
   return {
     ok: true,

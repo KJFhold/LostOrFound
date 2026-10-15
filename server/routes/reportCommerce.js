@@ -467,8 +467,21 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
         })
         .select("id")
         .single();
-      if (campaignError)
-        return res.status(400).json({ error: campaignError.message });
+      if (campaignError) {
+        console.error("[geo-alert][campaign-create-failed]", {
+          orderId: order.id,
+          reportId: order.report_id,
+          userId,
+          productCode: order.product_code,
+          errorCode: campaignError.code || null,
+          errorMessage: campaignError.message || String(campaignError),
+          errorDetails: campaignError.details || null,
+          errorHint: campaignError.hint || null,
+        });
+        return res
+          .status(400)
+          .json({ error: "GEO_ALERT_CAMPAIGN_CREATE_FAILED" });
+      }
       order.created_campaign_id = createdCampaign.id;
     }
 
@@ -485,13 +498,33 @@ router.post("/orders/:id/test-activate", requireUser, async (req, res) => {
       .eq("user_id", userId)
       .select("*")
       .single();
-    if (uErr) return res.status(400).json({ error: uErr.message });
+    if (uErr) {
+      console.error("[geo-alert][order-activation-failed]", {
+        orderId: order.id,
+        reportId: order.report_id,
+        userId,
+        campaignId: order.created_campaign_id || null,
+        errorCode: uErr.code || null,
+        errorMessage: uErr.message || String(uErr),
+        errorDetails: uErr.details || null,
+      });
+      return res
+        .status(400)
+        .json({ error: "GEO_ALERT_ORDER_ACTIVATION_FAILED" });
+    }
     let areaAlertDispatch = null;
     if (order.created_campaign_id) {
       try {
         areaAlertDispatch = await dispatchAreaAlertCampaign(
           order.created_campaign_id,
         );
+        console.info("[geo-alert][dispatch-complete]", {
+          orderId: order.id,
+          reportId: order.report_id,
+          userId,
+          campaignId: order.created_campaign_id,
+          dispatch: areaAlertDispatch,
+        });
       } catch (dispatchError) {
         console.error(
           "[commerce] area alert dispatch failed",
